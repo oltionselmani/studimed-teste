@@ -47,7 +47,7 @@ Rules for this task:
 - If the material does not cover something important about this topic, say so in the summary rather than filling it in from elsewhere.`,
     content: [
       {
-        type: 'text',
+        kind: 'text',
         text: `${examContext(params.exam)}
 
 Topic: ${params.topic}
@@ -112,7 +112,7 @@ Rules for this task:
 - Where other exams are close, account for them rather than pretending this exam is the only one.`,
     content: [
       {
-        type: 'text',
+        kind: 'text',
         text: `${examContext(params.exam)}
 
 Measured position (all figures from the student's own completed tests):

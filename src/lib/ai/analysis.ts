@@ -8,7 +8,7 @@ import {
 } from './schemas';
 import { HONESTY_RULES, examContext, languageInstruction } from './prompts';
 import { chunkMaterials, fitToBudget, renderChunks, sampleChunks } from './retrieval';
-import type { ContentBlock } from './client';
+import type { AiBlock } from './client';
 import type { Exam, Material } from '@/lib/types';
 
 /** A photographed page or slide, passed to the model's vision. */
@@ -39,13 +39,10 @@ export async function analyseCourseMaterial(
 
   // Photographed notes and slide images carry no extractable text, so they go
   // to the model as images alongside the excerpts.
-  const content: ContentBlock[] = [];
+  const content: AiBlock[] = [];
   for (const image of images.slice(0, 12)) {
-    content.push({ type: 'text', text: `Image from ${image.filename}:` });
-    content.push({
-      type: 'image',
-      source: { type: 'base64', media_type: image.mediaType, data: image.data },
-    });
+    content.push({ kind: 'text', text: `Image from ${image.filename}:` });
+    content.push({ kind: 'image', mediaType: image.mediaType, data: image.data });
   }
 
   if (selected.length === 0 && content.length === 0) throw new Error('NO_MATERIAL');
@@ -69,7 +66,7 @@ Rules for this task:
     content: [
       ...content,
       {
-        type: 'text',
+        kind: 'text',
         text: `${examContext(exam)}
 
 Files the student uploaded:
@@ -107,7 +104,7 @@ Rules for this task:
 - If the excerpts are too thin to judge something, say so in that field rather than estimating.`,
     content: [
       {
-        type: 'text',
+        kind: 'text',
         text: `${examContext(exam)}
 
 Previous exam papers provided by the student:

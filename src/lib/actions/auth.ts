@@ -11,7 +11,7 @@ import {
 } from '@/lib/auth/session';
 import { run } from '@/lib/db';
 import { persist } from '@/lib/db';
-import { setApiKey } from '@/lib/ai/client';
+import { isProviderId, setApiKey, setProvider } from '@/lib/ai/client';
 
 export interface FormState {
   error?: string;
@@ -81,9 +81,15 @@ export async function updateProfileAction(
     ],
   );
 
+  // The key belongs to a specific provider, so it is never stored without
+  // knowing which one the student was looking at when they typed it.
+  const chosen = String(formData.get('aiProvider') ?? '');
+  const provider = isProviderId(chosen) ? chosen : null;
+  if (provider) await setProvider(provider);
+
   const apiKey = formData.get('apiKey');
-  if (typeof apiKey === 'string' && apiKey.trim() && !apiKey.startsWith('•')) {
-    await setApiKey(apiKey);
+  if (provider && typeof apiKey === 'string' && apiKey.trim() && !apiKey.startsWith('•')) {
+    await setApiKey(apiKey, provider);
   }
 
   await persist();

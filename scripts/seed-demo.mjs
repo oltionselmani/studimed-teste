@@ -29,6 +29,26 @@ const schema = schemaModule.slice(schemaModule.indexOf('`') + 1, schemaModule.la
 db.run('PRAGMA foreign_keys = ON;');
 db.run(schema);
 
+// ...and the application's column migrations, for the same reason the app runs
+// them: CREATE TABLE IF NOT EXISTS adds nothing to a table that already exists,
+// so seeding into a database from an earlier version would fail on a column
+// the schema says is there.
+const migrationsModule = readFileSync(join(root, 'src', 'lib', 'db', 'migrations.ts'), 'utf8');
+// Anchored on the export name, because the file's own comments quote SQL in
+// backticks and a first-backtick search would find one of those instead.
+const marker = 'COLUMN_MIGRATIONS_JSON = `';
+const start = migrationsModule.indexOf(marker) + marker.length;
+const migrationsJson = migrationsModule.slice(start, migrationsModule.indexOf('`', start));
+for (const migration of JSON.parse(migrationsJson)) {
+  const info = db.exec(`PRAGMA table_info(${migration.table})`);
+  if (info.length === 0) continue; // the table itself is new; the schema made it
+  const columns = info[0].values.map((row) => row[1]);
+  if (columns.includes(migration.column)) continue;
+  db.run(
+    `ALTER TABLE ${migration.table} ADD COLUMN ${migration.column} ${migration.definition}`,
+  );
+}
+
 const now = new Date();
 const iso = (date) => date.toISOString();
 const daysFromNow = (days) => new Date(now.getTime() + days * 86_400_000);

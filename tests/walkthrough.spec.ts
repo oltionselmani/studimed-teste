@@ -115,7 +115,7 @@ test.describe('seeded walkthrough', () => {
 
     await page.goto(`/exams/${examId}/tests`);
     await expect(
-      page.getByText('An Anthropic API key is required to generate tests. Add one in Settings.'),
+      page.getByText('An AI provider key is required to generate tests. Add one in Settings.'),
     ).toBeVisible();
 
     // The generate button is disabled rather than pretending to work.
@@ -366,13 +366,40 @@ test.describe('seeded walkthrough', () => {
     await expect(page.getByRole('button', { name: 'Upload images' })).toBeVisible();
     await expect(page.getByText('No pages added yet.')).toBeVisible();
     await expect(
-      page.getByText('Reading scans requires an Anthropic API key. Add one in Settings.'),
+      page.getByText('Reading scans requires an AI provider key. Add one in Settings.'),
     ).toBeVisible();
 
     await page.screenshot({
       path: `test-results/shots/${info.project.name}-scan.png`,
       fullPage: true,
     });
+  });
+
+  test('the AI provider can be switched, and the free tier is not sold as free of cost', async ({
+    page,
+  }, info) => {
+    await signIn(page);
+    await page.goto('/settings');
+
+    const provider = page.getByLabel('AI provider');
+    await expect(provider).toBeVisible();
+
+    await provider.selectOption('gemini');
+    // The key field follows the choice, so a key is never stored against the
+    // wrong provider.
+    await expect(page.getByLabel(/API key · Google \(Gemini\)/)).toBeVisible();
+    await expect(page.getByText(/free-tier content is used to improve their products/)).toBeVisible();
+    await expect(page.getByLabel('Model')).toHaveValue('gemini-3.8-flash');
+
+    await page.screenshot({
+      path: `test-results/shots/${info.project.name}-provider.png`,
+      fullPage: true,
+    });
+
+    await provider.selectOption('anthropic');
+    await expect(page.getByLabel(/API key · Anthropic \(Claude\)/)).toBeVisible();
+    await expect(page.getByText(/free-tier content is used to improve/)).toHaveCount(0);
+    await expect(page.getByLabel('Model')).toHaveValue('claude-opus-5');
   });
 
   test('the whole interface switches to Albanian', async ({ page }, info) => {

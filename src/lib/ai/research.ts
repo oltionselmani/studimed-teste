@@ -1,19 +1,12 @@
 import 'server-only';
-import { structured, withWebSearch } from './client';
+import { searchWeb, structured } from './client';
 import { ResearchFindingsSchema, type ResearchFindings } from './schemas';
 import { HONESTY_RULES, examContext } from './prompts';
 import type { Exam } from '@/lib/types';
 
-interface RawResult {
-  title: string;
-  url: string;
-  /** Publication date as reported by the search tool, when it reports one. */
-  pageAge: string;
-}
-
 /**
  * Looks for publicly available information about previous exams for this
- * course, using Claude's server-side web search.
+ * course, using the configured provider's web search.
  *
  * What this is: a real search whose results are stored with their URLs so the
  * student can check them. What it is not: a claim that anything found is an
@@ -34,7 +27,7 @@ export async function researchPreviousExams(exam: Exam): Promise<{
     .filter(Boolean)
     .join(' ');
 
-  const message = await withWebSearch({
+  const { hits, prose } = await searchWeb({
     maxUses: 6,
     maxTokens: 16_000,
     system: `${HONESTY_RULES}
@@ -53,31 +46,10 @@ Search for publicly available information about previous exams and course docume
 Try several phrasings, including the course name with the university name, the course code, and terms for exams and syllabi in both English and Albanian ("provim", "provimi", "syllabus", "sillabus", "detyra", "past exam", "final exam"). Then summarise what you found and what you did not.`,
   });
 
-  // Pull the actual search hits out of the server-tool result blocks; this is
-  // the evidence, not the model's prose about it.
-  const raw: RawResult[] = [];
-  for (const block of message.content) {
-    if (block.type !== 'web_search_tool_result') continue;
-    const content = (block as { content?: unknown }).content;
-    if (!Array.isArray(content)) continue; // an error object, not a result list
-    for (const entry of content as Record<string, unknown>[]) {
-      if (entry?.type !== 'web_search_result') continue;
-      raw.push({
-        title: String(entry.title ?? ''),
-        url: String(entry.url ?? ''),
-        // Search results carry a title, a URL and a publication date — not a
-        // text extract. The date is kept as the only extra fact available.
-        pageAge: entry.page_age ? String(entry.page_age) : '',
-      });
-    }
-  }
-
-  const prose = message.content
-    .map((block) => (block.type === 'text' ? block.text : ''))
-    .filter(Boolean)
-    .join('\n');
-
-  if (raw.length === 0) {
+  // The hits are the evidence; the model's prose about them is not. A hit
+  // carries a title, a URL and, where the provider reports one, a date — not a
+  // text extract.
+  if (hits.length === 0) {
     return {
       rawCount: 0,
       findings: {
@@ -107,14 +79,14 @@ The conclusion must state plainly what was and was not established, and must not
 Every url must be copied exactly from the results. Never write a URL that was not in the results.`,
     content: [
       {
-        type: 'text',
+        kind: 'text',
         text: `Course: ${queryContext}
 
 The search assistant reported:
 ${prose.slice(0, 4000)}
 
 Raw search results:
-${raw
+${hits
   .map(
     (result, index) =>
       `[${index}] ${result.title}\n    ${result.url}${result.pageAge ? `\n    published: ${result.pageAge}` : ''}`,
@@ -125,9 +97,9 @@ ${raw
   });
 
   // Discard anything whose URL was not actually in the search results.
-  const allowed = new Set(raw.map((result) => result.url));
+  const allowed = new Set(hits.map((result) => result.url));
   return {
-    rawCount: raw.length,
+    rawCount: hits.length,
     findings: {
       ...findings,
       findings: findings.findings.filter((entry) => allowed.has(entry.url)),

@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { structured } from './client';
 import { ScanPageReadSchema, type ScanPageRead } from './schemas';
 import { HONESTY_RULES } from './prompts';
-import type { ContentBlock } from './client';
+import type { AiBlock } from './client';
 import type { Question } from '@/lib/types';
 
 const IMAGE_TYPES: Record<string, 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp'> = {
@@ -36,17 +36,14 @@ export async function readScanPage(params: {
 }): Promise<ScanPageRead> {
   const { storagePath, questions } = params;
 
-  const content: ContentBlock[] = [];
+  const content: AiBlock[] = [];
   const mediaType = mediaTypeFor(storagePath);
   const data = (await readFile(storagePath)).toString('base64');
 
   if (mediaType) {
-    content.push({ type: 'image', source: { type: 'base64', media_type: mediaType, data } });
+    content.push({ kind: 'image', mediaType, data });
   } else if (storagePath.toLowerCase().endsWith('.pdf')) {
-    content.push({
-      type: 'document',
-      source: { type: 'base64', media_type: 'application/pdf', data },
-    });
+    content.push({ kind: 'document', mediaType: 'application/pdf', data });
   } else {
     throw new Error('UNSUPPORTED_SCAN_FORMAT');
   }
@@ -64,7 +61,7 @@ export async function readScanPage(params: {
     .join('\n');
 
   content.push({
-    type: 'text',
+    kind: 'text',
     text: `This is page ${params.pageIndex + 1} of ${params.totalPages} of a printed practice exam that the student answered by hand.
 
 The printed questions on this exam are:

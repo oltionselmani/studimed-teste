@@ -162,7 +162,7 @@ ${renderChunks(selected)}`;
     maxTokens: 64_000,
     cacheSystem: true,
     system,
-    content: [{ type: 'text', text: brief }],
+    content: [{ kind: 'text', text: brief }],
   });
 
   let questions = normalise(first.questions, request);
@@ -180,7 +180,7 @@ ${renderChunks(selected)}`;
       system,
       content: [
         {
-          type: 'text',
+          kind: 'text',
           text: `${brief}
 
 The following ${failures.length} question(s) failed review and must be replaced. Write exactly ${failures.length} NEW questions covering the same topics, avoiding the problems listed and avoiding duplication with the questions that were kept.
@@ -242,7 +242,7 @@ Reject a question when any of these is true:
 Return one entry per question you were given, using the index provided.`,
     content: [
       {
-        type: 'text',
+        kind: 'text',
         text: `Course: ${request.exam.course_name}
 Topics in this course: ${request.allTopics.join(', ') || '(none recorded)'}
 

@@ -19,9 +19,20 @@ interface ColumnMigration {
   definition: string;
 }
 
-const COLUMNS: ColumnMigration[] = [
-  { table: 'attempts', column: 'part_id', definition: 'TEXT REFERENCES exam_parts(id) ON DELETE SET NULL' },
-];
+/**
+ * Held as JSON text so tooling that cannot import TypeScript — the demo seed
+ * script — applies exactly this list rather than a second copy of it that can
+ * drift out of step with this one.
+ */
+export const COLUMN_MIGRATIONS_JSON = `[
+  {
+    "table": "attempts",
+    "column": "part_id",
+    "definition": "TEXT REFERENCES exam_parts(id) ON DELETE SET NULL"
+  }
+]`;
+
+const COLUMNS: ColumnMigration[] = JSON.parse(COLUMN_MIGRATIONS_JSON);
 
 function columnExists(db: Database, table: string, column: string): boolean {
   const statement = db.prepare(`PRAGMA table_info(${table})`);

@@ -26,22 +26,37 @@ function SaveButton() {
   );
 }
 
+/** One configurable AI provider, as the server describes it. */
+export interface ProviderOption {
+  id: string;
+  label: string;
+  keyPlaceholder: string;
+  keyUrl: string;
+  envVar: string;
+  model: string;
+  keyFromEnv: boolean;
+  keyConfigured: boolean;
+}
+
 export function SettingsPage({
   user,
-  apiKeyFromEnv,
-  apiKeyConfigured,
-  model,
+  providers,
+  activeProvider,
+  providerLocked,
   dataLocation,
 }: {
   user: User;
-  apiKeyFromEnv: boolean;
-  apiKeyConfigured: boolean;
-  model: string;
+  providers: ProviderOption[];
+  activeProvider: string;
+  /** True when the environment fixes the provider, so this installation does not choose. */
+  providerLocked: boolean;
   dataLocation: string;
 }) {
   const { d } = useI18n();
   const [state, action] = useActionState<FormState, FormData>(updateProfileAction, {});
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [selectedProvider, setSelectedProvider] = useState(activeProvider);
+  const provider = providers.find((entry) => entry.id === selectedProvider) ?? providers[0];
 
   return (
     <div className="mx-auto max-w-3xl px-5 py-8 sm:px-8 lg:py-12">
@@ -129,19 +144,59 @@ export function SettingsPage({
         <Card>
           <CardHeader title={d.settings.ai} />
           <div className="space-y-5 p-5">
-            {apiKeyFromEnv ? (
+            <Field label={d.settings.provider} hint={d.settings.providerHelp} htmlFor="aiProviderChoice">
+              <select
+                id="aiProviderChoice"
+                className={inputClass}
+                value={selectedProvider}
+                onChange={(event) => setSelectedProvider(event.target.value)}
+                disabled={providerLocked}
+              >
+                {providers.map((entry) => (
+                  <option key={entry.id} value={entry.id}>
+                    {entry.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            {/* The select is disabled when the environment decides, and a
+                disabled control submits nothing — so the key always arrives
+                labelled with the provider it belongs to. */}
+            <input type="hidden" name="aiProvider" value={provider.id} />
+
+            {providerLocked ? <Notice tone="info">{d.settings.providerEnvSet}</Notice> : null}
+
+            {provider.keyFromEnv ? (
               <Notice tone="success">{d.settings.apiKeyEnvSet}</Notice>
-            ) : apiKeyConfigured ? null : (
-              <Notice tone="warn">{d.settings.apiKeyMissing}</Notice>
+            ) : provider.keyConfigured ? null : (
+              <Notice tone="warn">
+                {provider.id === activeProvider
+                  ? d.settings.apiKeyMissing
+                  : d.settings.providerKeyNeeded}
+              </Notice>
             )}
 
-            {!apiKeyFromEnv ? (
+            {provider.id === 'gemini' ? (
+              <Notice tone="warn">{d.settings.geminiFreeTier}</Notice>
+            ) : null}
+
+            {!provider.keyFromEnv ? (
               <Field
-                label={d.settings.apiKey}
+                label={`${d.settings.apiKeyFor} · ${provider.label}`}
                 hint={
                   <>
                     {d.settings.apiKeyHelp}
-                    <span className="mt-1 block">{d.settings.apiKeyShared}</span>
+                    <span className="mt-1 block">
+                      {d.settings.apiKeyShared} ({provider.envVar})
+                    </span>
+                    <a
+                      className="mt-1 block underline"
+                      href={provider.keyUrl}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                    >
+                      {d.settings.getKey}
+                    </a>
                   </>
                 }
                 htmlFor="apiKey"
@@ -151,14 +206,19 @@ export function SettingsPage({
                   name="apiKey"
                   type="password"
                   className={inputClass}
-                  placeholder={apiKeyConfigured ? '••••••••••••••••' : 'sk-ant-…'}
+                  placeholder={provider.keyConfigured ? '••••••••••••••••' : provider.keyPlaceholder}
                   autoComplete="off"
                 />
               </Field>
             ) : null}
 
-            <Field label={d.settings.model}>
-              <input className={cx(inputClass, 'opacity-60 font-mono')} value={model} readOnly />
+            <Field label={d.settings.model} htmlFor="aiModel">
+              <input
+                id="aiModel"
+                className={cx(inputClass, 'opacity-60 font-mono')}
+                value={provider.model}
+                readOnly
+              />
             </Field>
           </div>
         </Card>

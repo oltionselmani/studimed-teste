@@ -1,25 +1,62 @@
 import 'server-only';
-import Anthropic from '@anthropic-ai/sdk';
-import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import type { ZodType, infer as ZodInfer } from 'zod';
 import { one, run } from '@/lib/db';
+import {
+  AiFeatureUnsupportedError,
+  AiInvalidOutputError,
+  AiRateLimitedError,
+  AiUnavailableError,
+} from './errors';
+import { anthropicProvider } from './providers/anthropic';
+import { geminiProvider } from './providers/gemini';
+import type {
+  AiBlock,
+  AiProvider,
+  ProviderId,
+  SearchRequest,
+  SearchResult,
+  StructuredRequest,
+} from './provider';
 
-export const DEFAULT_MODEL = 'claude-opus-5';
+export { AiFeatureUnsupportedError, AiInvalidOutputError, AiRateLimitedError, AiUnavailableError };
+export type { AiBlock, ProviderId, SearchHit, SearchResult } from './provider';
+export { textBlock } from './provider';
 
-/** Thrown when AI is asked for but cannot run. Callers surface it, never fake around it. */
-export class AiUnavailableError extends Error {
-  constructor() {
-    super('AI_UNAVAILABLE');
-    this.name = 'AiUnavailableError';
-  }
+/**
+ * ExamOS talks to one AI provider at a time. Which one is a setting, not a
+ * rewrite: every workflow asks for validated structured output and gets it
+ * from whichever provider is configured.
+ */
+export const PROVIDERS: Record<ProviderId, AiProvider> = {
+  anthropic: anthropicProvider,
+  gemini: geminiProvider,
+};
+
+export const PROVIDER_IDS = Object.keys(PROVIDERS) as ProviderId[];
+
+export function isProviderId(value: string): value is ProviderId {
+  return value === 'anthropic' || value === 'gemini';
 }
 
-/** Thrown when the model answered but the answer failed schema validation. */
-export class AiInvalidOutputError extends Error {
-  constructor(detail?: string) {
-    super(detail ? `AI_INVALID_OUTPUT: ${detail}` : 'AI_INVALID_OUTPUT');
-    this.name = 'AiInvalidOutputError';
-  }
+/** Where each provider's key lives in local settings. */
+const KEY_ROW: Record<ProviderId, string> = {
+  anthropic: 'anthropic_api_key',
+  gemini: 'gemini_api_key',
+};
+
+const PROVIDER_ROW = 'ai_provider';
+
+export function apiKeyFromEnv(provider: ProviderId): boolean {
+  return Boolean(envKey(provider));
+}
+
+function envKey(provider: ProviderId): string | null {
+  const direct = process.env[PROVIDERS[provider].envVar]?.trim();
+  if (direct) return direct;
+  // Google's own tooling accepts either name, so a key set for another Google
+  // tool on the same machine is picked up rather than silently ignored.
+  if (provider === 'gemini') return process.env.GOOGLE_API_KEY?.trim() || null;
+  return null;
 }
 
 /**
@@ -27,56 +64,95 @@ export class AiInvalidOutputError extends Error {
  * local settings row in the desktop build. There is no bundled key and no
  * offline fallback that invents content: if there is no key, AI features say so.
  */
-export async function getApiKey(): Promise<string | null> {
-  const fromEnv = process.env.ANTHROPIC_API_KEY?.trim();
+export async function getApiKey(provider?: ProviderId): Promise<string | null> {
+  const id = provider ?? (await providerId());
+  const fromEnv = envKey(id);
   if (fromEnv) return fromEnv;
   const stored = await one<{ value: string }>('SELECT value FROM app_meta WHERE key = ?', [
-    'anthropic_api_key',
+    KEY_ROW[id],
   ]);
   return stored?.value?.trim() || null;
 }
 
-export async function setApiKey(key: string): Promise<void> {
+export async function setApiKey(key: string, provider: ProviderId): Promise<void> {
   const trimmed = key.trim();
   if (trimmed) {
     await run('INSERT OR REPLACE INTO app_meta (key, value) VALUES (?, ?)', [
-      'anthropic_api_key',
+      KEY_ROW[provider],
       trimmed,
     ]);
   } else {
-    await run('DELETE FROM app_meta WHERE key = ?', ['anthropic_api_key']);
+    await run('DELETE FROM app_meta WHERE key = ?', [KEY_ROW[provider]]);
   }
 }
 
-export function apiKeyFromEnv(): boolean {
-  return Boolean(process.env.ANTHROPIC_API_KEY?.trim());
+export async function setProvider(provider: ProviderId): Promise<void> {
+  await run('INSERT OR REPLACE INTO app_meta (key, value) VALUES (?, ?)', [
+    PROVIDER_ROW,
+    provider,
+  ]);
+}
+
+/** True when the deployment fixed the provider, so the setting is not the app's to change. */
+export function providerFromEnv(): ProviderId | null {
+  const value = process.env.EXAMOS_PROVIDER?.trim().toLowerCase();
+  return value && isProviderId(value) ? value : null;
+}
+
+/**
+ * Which provider is in use: the deployment's choice, then the stored setting,
+ * then whichever one actually has a key. Nothing is guessed from a key's shape.
+ */
+export async function providerId(): Promise<ProviderId> {
+  const fromEnv = providerFromEnv();
+  if (fromEnv) return fromEnv;
+
+  const stored = await one<{ value: string }>('SELECT value FROM app_meta WHERE key = ?', [
+    PROVIDER_ROW,
+  ]);
+  const value = stored?.value?.trim();
+  if (value && isProviderId(value)) return value;
+
+  for (const id of PROVIDER_IDS) {
+    if (envKey(id)) return id;
+    const row = await one<{ value: string }>('SELECT value FROM app_meta WHERE key = ?', [
+      KEY_ROW[id],
+    ]);
+    if (row?.value?.trim()) return id;
+  }
+  return 'anthropic';
 }
 
 export async function aiAvailable(): Promise<boolean> {
   return (await getApiKey()) !== null;
 }
 
-export function modelId(): string {
-  return process.env.EXAMOS_MODEL?.trim() || DEFAULT_MODEL;
+/**
+ * The model for a provider. `EXAMOS_MODEL` is honoured only when it plausibly
+ * names a model of the provider in use, so a leftover value for one provider
+ * cannot send an unusable model id to the other.
+ */
+export function modelFor(provider: ProviderId): string {
+  const specific = process.env[`EXAMOS_MODEL_${provider.toUpperCase()}`]?.trim();
+  if (specific) return specific;
+
+  const shared = process.env.EXAMOS_MODEL?.trim();
+  if (shared) {
+    const prefix = provider === 'anthropic' ? 'claude' : 'gemini';
+    if (shared.toLowerCase().startsWith(prefix)) return shared;
+  }
+  return PROVIDERS[provider].defaultModel;
 }
 
-async function client(): Promise<Anthropic> {
-  const apiKey = await getApiKey();
+export async function modelId(): Promise<string> {
+  return modelFor(await providerId());
+}
+
+async function active(): Promise<{ provider: AiProvider; apiKey: string; model: string }> {
+  const id = await providerId();
+  const apiKey = await getApiKey(id);
   if (!apiKey) throw new AiUnavailableError();
-  return new Anthropic({ apiKey, maxRetries: 2, timeout: 10 * 60 * 1000 });
-}
-
-export type ContentBlock = Anthropic.ContentBlockParam;
-
-interface StructuredRequest<T extends ZodType> {
-  system: string;
-  content: ContentBlock[];
-  schema: T;
-  maxTokens?: number;
-  /** 'low' for mechanical extraction, 'high' for anything requiring judgement. */
-  effort?: 'low' | 'medium' | 'high' | 'xhigh';
-  /** Caches the system prompt prefix across the calls of one workflow. */
-  cacheSystem?: boolean;
+  return { provider: PROVIDERS[id], apiKey, model: modelFor(id) };
 }
 
 /**
@@ -86,70 +162,16 @@ interface StructuredRequest<T extends ZodType> {
 export async function structured<T extends ZodType>(
   request: StructuredRequest<T>,
 ): Promise<ZodInfer<T>> {
-  const anthropic = await client();
-  const maxTokens = request.maxTokens ?? 32_000;
-
-  const stream = anthropic.messages.stream({
-    model: modelId(),
-    max_tokens: maxTokens,
-    output_config: {
-      format: zodOutputFormat(request.schema),
-      effort: request.effort ?? 'high',
-    },
-    system: request.cacheSystem
-      ? [{ type: 'text', text: request.system, cache_control: { type: 'ephemeral' } }]
-      : request.system,
-    messages: [{ role: 'user', content: request.content }],
-  });
-
-  const message = await stream.finalMessage();
-
-  if (message.stop_reason === 'refusal') {
-    throw new AiInvalidOutputError('the request was declined by the model');
-  }
-  if (message.stop_reason === 'max_tokens') {
-    throw new AiInvalidOutputError('the response was cut off before it finished');
-  }
-
-  const parsed = (message as { parsed_output?: unknown }).parsed_output;
-  if (parsed === undefined || parsed === null) {
-    throw new AiInvalidOutputError('no structured output was returned');
-  }
-
-  const result = request.schema.safeParse(parsed);
-  if (!result.success) {
-    throw new AiInvalidOutputError(result.error.issues[0]?.message ?? 'schema mismatch');
-  }
-  return result.data as ZodInfer<T>;
+  const { provider, apiKey, model } = await active();
+  return provider.structured(request, { apiKey, model });
 }
 
 /**
- * A plain (unstructured) call used only where the model needs a server tool —
- * currently the live web search behind previous-exam research. The caller reads
- * the tool result blocks, not the prose.
+ * A live web search, used only where a feature needs sources it can show the
+ * student — currently previous-exam research. The caller reads the hits, not
+ * the prose about them.
  */
-export async function withWebSearch(params: {
-  system: string;
-  prompt: string;
-  maxUses?: number;
-  maxTokens?: number;
-}): Promise<Anthropic.Message> {
-  const anthropic = await client();
-  const stream = anthropic.messages.stream({
-    model: modelId(),
-    max_tokens: params.maxTokens ?? 16_000,
-    system: params.system,
-    tools: [
-      {
-        // The basic search variant, rather than the newer filtered one, because
-        // EXAMOS_MODEL is configurable and this variant is accepted by every
-        // model that supports search at all.
-        type: 'web_search_20250305',
-        name: 'web_search',
-        max_uses: params.maxUses ?? 6,
-      } as unknown as Anthropic.ToolUnion,
-    ],
-    messages: [{ role: 'user', content: params.prompt }],
-  });
-  return stream.finalMessage();
+export async function searchWeb(request: SearchRequest): Promise<SearchResult> {
+  const { provider, apiKey, model } = await active();
+  return provider.searchWeb(request, { apiKey, model });
 }

@@ -11,5 +11,10 @@
     "incremental": false,
     "plugins": []
   },
-  "include": ["src/lib/engine/**/*.ts", "src/lib/types.ts", "src/lib/ai/schemas.ts"]
+  "include": [
+    "src/lib/engine/**/*.ts",
+    "src/lib/types.ts",
+    "src/lib/ai/schemas.ts",
+    "src/lib/ai/json-schema.ts"
+  ]
 }

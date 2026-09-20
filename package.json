@@ -1,8 +1,8 @@
 {
   "name": "examos",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
-  "description": "ExamOS \u2014 an exam readiness system that measures how prepared you actually are and tells you what to do next.",
+  "description": "ExamOS — an exam readiness system that measures how prepared you actually are and tells you what to do next.",
   "type": "module",
   "scripts": {
     "predev": "node scripts/copy-wasm.mjs",
@@ -23,6 +23,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.127.0",
+    "@google/genai": "^2.23.0",
     "jose": "^6.1.0",
     "jszip": "^3.10.1",
     "mammoth": "^1.11.0",

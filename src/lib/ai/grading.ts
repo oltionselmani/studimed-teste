@@ -100,7 +100,7 @@ Marking rules:
 - awarded_points must never exceed the question's points.`,
     content: [
       {
-        type: 'text',
+        kind: 'text',
         text: `Course: ${courseName}
 
 ${gradable

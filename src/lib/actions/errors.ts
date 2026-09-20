@@ -1,4 +1,9 @@
-import { AiInvalidOutputError, AiUnavailableError } from '@/lib/ai/client';
+import {
+  AiFeatureUnsupportedError,
+  AiInvalidOutputError,
+  AiRateLimitedError,
+  AiUnavailableError,
+} from '@/lib/ai/client';
 
 /**
  * Maps a thrown error onto a translation key.
@@ -8,6 +13,14 @@ import { AiInvalidOutputError, AiUnavailableError } from '@/lib/ai/client';
  */
 export function errorCode(error: unknown): string {
   if (error instanceof AiUnavailableError) return 'aiUnavailable';
+  if (error instanceof AiRateLimitedError) {
+    console.error('[examos] AI rate limited:', error.message);
+    return 'aiRateLimited';
+  }
+  if (error instanceof AiFeatureUnsupportedError) {
+    console.error('[examos] AI capability missing:', error.message);
+    return 'aiUnsupported';
+  }
   if (error instanceof AiInvalidOutputError) {
     console.error('[examos] AI output rejected:', error.message);
     return 'aiInvalid';

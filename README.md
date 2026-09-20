@@ -28,6 +28,7 @@ explanations; it never decides how ready you are.
 | **Create an exam** | Course, date, target grade, current standing, exam weight. A live countdown. |
 | **Split it into kolokviums** | An exam sat in parts: each with its own date, topics, weight and result. Everything below is then measured one sitting at a time. |
 | **Upload material** | PDF, Word, PowerPoint, plain text, and photos of handwritten notes. |
+| **Pick your AI** | Anthropic (Claude) or Google (Gemini), switchable in Settings. Same prompts, same rules, same validation either way. |
 | **Analyse the course** | Extracts topics, definitions, formulas, algorithms and terminology — each traced back to the file it came from. |
 | **Previous exams** | Analyses past papers you provide, and can run a real web search for public course documentation. |
 | **Generate tests** | Diagnostic, targeted practice, mistake re-test, or a full timed mock. Five difficulty levels. |
@@ -91,7 +92,9 @@ percentage-to-grade mapping is shown as an ExamOS default, not a university
 rule, and you can edit it per exam.
 
 **No key, no invention.** Without an API key the AI features refuse with a
-clear message rather than producing placeholder content.
+clear message rather than producing placeholder content. The same holds when
+the configured provider cannot do what a feature needs: previous-exam research
+says the search never ran, which is not the same as finding nothing.
 
 ---
 
@@ -206,8 +209,12 @@ npm start                      # PORT and HOSTNAME are honoured
 
 | Variable | Purpose |
 |---|---|
-| `ANTHROPIC_API_KEY` | Required for every AI feature. Can also be set in Settings, which stores it locally. |
-| `EXAMOS_MODEL` | Model for the structured workflows. Defaults to `claude-opus-5`. |
+| `EXAMOS_PROVIDER` | `anthropic` or `gemini`. Optional: fixes the provider for this installation and removes the choice from Settings. |
+| `ANTHROPIC_API_KEY` | Key for the Anthropic provider. Can also be set in Settings, which stores it locally. |
+| `GEMINI_API_KEY` | Key for the Gemini provider (`GOOGLE_API_KEY` is also accepted). |
+| `EXAMOS_MODEL_ANTHROPIC` | Model for the Anthropic provider. Defaults to `claude-opus-5`. |
+| `EXAMOS_MODEL_GEMINI` | Model for the Gemini provider. Defaults to `gemini-3.8-flash`. |
+| `EXAMOS_MODEL` | Applies to whichever provider its value names, for a single-provider setup. |
 | `EXAMOS_SESSION_SECRET` | Signs session cookies. Generated and stored locally if unset. |
 | `EXAMOS_DATA_DIR` | Where the database and uploads live. Defaults to `./data`. |
 | `EXAMOS_SQL_WASM` | Path to `sql-wasm.wasm`. Normally resolved automatically. |
@@ -247,6 +254,25 @@ desktop app, **File → Save as PDF** writes the file directly.
 
 ### AI architecture
 
+**Two providers, one contract.** ExamOS runs on **Anthropic (Claude)** or
+**Google (Gemini)** — chosen in Settings, or fixed with `EXAMOS_PROVIDER`.
+Everything above the provider is identical: the same prompts, the same honesty
+rules, the same validated schemas, and the same deterministic readiness engine,
+which no provider ever touches. A provider implements exactly two things
+(`src/lib/ai/provider.ts`): structured output, and a web search that returns
+its hits rather than prose about them.
+
+Gemini reads a documented subset of JSON Schema, so the app's zod contracts are
+converted and pruned to that subset (`src/lib/ai/json-schema.ts`, tested).
+Dropping a constraint from the *request* never loosens what the app accepts:
+the reply is still parsed with the full zod schema before anything is stored.
+
+**On Gemini's free tier:** Google states that free-tier content is used to
+improve their products, which can include human review. Uploaded course
+material is your university's, so use a paid key — or Anthropic — for anything
+treated as confidential. The app says this next to the key field rather than
+only here.
+
 Every model call returns validated JSON — no free-form prose is parsed
 anywhere.
 
@@ -254,7 +280,7 @@ anywhere.
 |---|---|
 | Course analysis | Topics and their contents, with per-file references. Reads images through vision. |
 | Previous-exam analysis | Observable patterns in the papers you provided, phrased as observations. |
-| Previous-exam research | A real web search; results stored with their URLs for you to check. |
+| Previous-exam research | A real web search; results stored with their URLs for you to check. Google's grounding returns its own redirect links, which are stored exactly as given rather than rewritten. |
 | Question generation | Questions from your material, then a two-stage quality gate. |
 | Answer evaluation | Marks written answers against the criteria stored with each question. |
 | Scan reading | Transcribes handwriting and reports its own confidence. |
@@ -277,9 +303,9 @@ pass. Anything that fails is regenerated before you see the test.
 
 ```bash
 npm run typecheck
-npm test                 # 35 unit tests: scoring engine and quality gate
+npm test                 # 41 unit tests: scoring engine, quality gate, schema conversion
 npm run seed:demo        # a worked example to click through
-npm run test:e2e         # 54 browser tests: 27 checks at desktop and phone width
+npm run test:e2e         # 56 browser tests: 28 checks at desktop and phone width
 ```
 
 The unit tests cover the parts that must be provably right: the grading-scale
