@@ -7,6 +7,10 @@ import { defineConfig, devices } from '@playwright/test';
  */
 export default defineConfig({
   testDir: './tests',
+  // Only the browser specs. Playwright's default pattern would also collect
+  // the node:test unit files next to them, which import a build directory that
+  // only exists after `npm test`.
+  testMatch: '**/*.spec.ts',
   timeout: 180_000,
   expect: { timeout: 20_000 },
   fullyParallel: false,
