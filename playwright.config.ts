@@ -11,7 +11,8 @@ export default defineConfig({
   // the node:test unit files next to them, which import a build directory that
   // only exists after `npm test`.
   testMatch: '**/*.spec.ts',
-  timeout: 180_000,
+  // A hung test should fail fast rather than burn three minutes per worker.
+  timeout: 90_000,
   expect: { timeout: 20_000 },
   fullyParallel: false,
   workers: 1,

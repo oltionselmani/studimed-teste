@@ -154,16 +154,18 @@ test.describe('seeded walkthrough', () => {
     const opposite = startedDone ? 'Mark done' : 'Undo';
 
     await toggle();
-    await page.waitForLoadState('networkidle');
     await expect(page.getByRole('button', { name: opposite }).first()).toBeVisible();
 
     // Survives a reload — it is stored, not just local state.
     await page.reload();
     await expect(page.getByRole('button', { name: opposite }).first()).toBeVisible();
 
-    // Put it back so repeated runs start from the same place.
+    // Put it back so repeated runs start from the same place, and confirm it
+    // actually went back rather than assuming.
     await page.getByRole('button', { name: opposite }).first().click();
-    await page.waitForLoadState('networkidle');
+    await expect(
+      page.getByRole('button', { name: startedDone ? 'Undo' : 'Mark done' }).first(),
+    ).toBeVisible();
   });
 
   test('mistake book keeps the concept, not just the wrong answer', async ({ page }, info) => {
@@ -378,7 +380,9 @@ test.describe('seeded walkthrough', () => {
     await page.goto('/settings');
     await page.getByLabel('Interface language').selectOption('sq');
     await page.getByRole('button', { name: 'Save' }).click();
-    await page.waitForLoadState('networkidle');
+    // The button relabels itself once the change is saved and the layout
+    // re-renders — a precise signal that the switch landed.
+    await expect(page.getByRole('button', { name: 'Ruaj' })).toBeVisible();
 
     await page.goto('/dashboard');
     await expect(page.getByRole('heading', { name: 'Paneli' })).toBeVisible();
@@ -399,7 +403,7 @@ test.describe('seeded walkthrough', () => {
     await page.goto('/settings');
     await page.getByLabel('Gjuha e ndërfaqes').selectOption('en');
     await page.getByRole('button', { name: 'Ruaj' }).click();
-    await page.waitForLoadState('networkidle');
+    await expect(page.getByRole('button', { name: 'Save' })).toBeVisible();
   });
 
   test('dark mode applies without a flash of the light theme', async ({ page }, info) => {
