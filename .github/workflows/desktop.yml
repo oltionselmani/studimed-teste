@@ -5,9 +5,10 @@ name: Desktop installers
 #
 # It runs three ways:
 #   - automatically, whenever anything that affects packaging changes;
-#   - on demand from the Actions tab ("Run workflow");
-#   - on a v* tag, which additionally publishes a GitHub Release with the
-#     installers attached.
+#   - on demand from the Actions tab ("Run workflow"), which also publishes a
+#     GitHub Release when a tag name is given;
+#   - on a v* tag, which always publishes a Release with the installers
+#     attached.
 #
 # Either way the installers are downloadable from the run's Artifacts section.
 
@@ -19,6 +20,13 @@ on:
         type: choice
         default: windows
         options: [windows, all]
+      release_tag:
+        description: >-
+          Publish a GitHub Release under this tag (for example v0.1.0), so the
+          installer has a plain download link instead of living in a zipped
+          artifact. Leave empty to only upload artifacts.
+        type: string
+        default: ''
   push:
     tags: ['v*']
     branches: ['**']
@@ -117,27 +125,50 @@ jobs:
   release:
     name: Attach the installers to the release
     needs: [windows, macos, linux]
-    if: startsWith(github.ref, 'refs/tags/v')
+    # `always()` so a Release can be cut from a Windows-only run, where the
+    # other two jobs are skipped rather than run. The Windows installer is the
+    # point of the release, so it still has to have succeeded.
+    if: >-
+      always() && needs.windows.result == 'success' &&
+      (startsWith(github.ref, 'refs/tags/v') || inputs.release_tag != '')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
 
+      # The release notes list what is actually attached. Promising a .dmg that
+      # was never built would be a download link that 404s.
+      - name: Describe what is attached
+        id: notes
+        run: |
+          {
+            echo 'body<<RELEASE_NOTES_EOF'
+            echo 'Download the installer for your machine:'
+            echo
+            if find artifacts -name '*.exe' | grep -q .; then
+              echo '- **Windows** — `ExamOS-Setup-*.exe` (setup wizard: choose the folder, then Install)'
+            fi
+            if find artifacts -name '*.dmg' | grep -q .; then
+              echo '- **macOS** — `ExamOS-*.dmg`'
+            fi
+            if find artifacts -name '*.AppImage' | grep -q .; then
+              echo '- **Linux** — `ExamOS-*.AppImage`'
+            fi
+            echo
+            echo 'The installers are unsigned, so Windows SmartScreen shows a warning on'
+            echo 'first run: choose **More info → Run anyway**.'
+            echo
+            echo 'Everything you put into ExamOS stays on your own machine. AI features'
+            echo 'need an Anthropic API key, which you add under Settings after the'
+            echo 'first launch.'
+            echo 'RELEASE_NOTES_EOF'
+          } >> "$GITHUB_OUTPUT"
+
       - uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ inputs.release_tag || github.ref_name }}
+          target_commitish: ${{ github.sha }}
           files: artifacts/**/*
           generate_release_notes: true
-          body: |
-            Download the installer for your machine:
-
-            - **Windows** — `ExamOS-Setup-*.exe` (setup wizard: choose the folder, then Install)
-            - **macOS** — `ExamOS-*.dmg`
-            - **Linux** — `ExamOS-*.AppImage`
-
-            The installers are unsigned, so Windows SmartScreen shows a warning on
-            first run: choose **More info → Run anyway**.
-
-            Everything you put into ExamOS stays on your own machine. AI features
-            need an Anthropic API key, which you add under Settings after the
-            first launch.
+          body: ${{ steps.notes.outputs.body }}

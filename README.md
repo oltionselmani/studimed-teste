@@ -142,9 +142,11 @@ npm run desktop:linux   # .AppImage
 
 The installers are also built by the **Desktop installers** workflow. It runs
 automatically whenever anything affecting packaging changes, and on demand from
-the Actions tab; either way the `.exe` is in the run's **Artifacts** section.
-Pushing a `v*` tag additionally publishes a GitHub Release with the installers
-for all three platforms attached.
+the Actions tab; either way the `.exe` is in the run's **Artifacts** section,
+which is a zip and needs a GitHub sign-in. Give the manual run a **release tag**
+— or push a `v*` tag — and it publishes a GitHub Release instead, where the
+installer is a plain download link. The notes list only the installers that run
+actually built.
 
 The Windows installer is a standard wizard: choose the folder, then Install.
 It is unsigned, so Windows SmartScreen warns on first launch — choose
