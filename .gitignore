@@ -3,17 +3,26 @@ node_modules/
 out/
 dist/
 release/
-vendor/
-data/
+
+# Generated build inputs. build/icon.png is committed so a packaging run does
+# not depend on regenerating it.
+/vendor/
 *.tsbuildinfo
 next-env.d.ts
+
+# Local databases and uploads. Anchored to the repository root so they do not
+# also match src/lib/data, which is source code.
+/data/
+/.test-data/
+/.demo-data/
+/.demo-run/
+/.test-build/
+
+# Test output.
+test-results/
+playwright-report/
+
 .env
 .env.local
 .DS_Store
 npm-debug.log*
-.test-data/
-.demo-data/
-.test-build/
-.demo-run/
-test-results/
-playwright-report/
