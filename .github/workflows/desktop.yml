@@ -160,7 +160,8 @@ jobs:
             echo 'first run: choose **More info → Run anyway**.'
             echo
             echo 'Everything you put into ExamOS stays on your own machine. AI features'
-            echo 'need an Anthropic API key, which you add under Settings after the'
+            echo 'need a key for one of the supported providers — Anthropic (Claude) or'
+            echo 'Google (Gemini) — which you choose and add under Settings after the'
             echo 'first launch.'
             echo 'RELEASE_NOTES_EOF'
           } >> "$GITHUB_OUTPUT"
