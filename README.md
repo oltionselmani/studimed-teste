@@ -103,8 +103,11 @@ npm run desktop:mac     # .dmg
 npm run desktop:linux   # .AppImage
 ```
 
-The installers are also built by the **Desktop installers** workflow — run it
-from the Actions tab, or push a `v*` tag to get a release with them attached.
+The installers are also built by the **Desktop installers** workflow. It runs
+automatically whenever anything affecting packaging changes, and on demand from
+the Actions tab; either way the `.exe` is in the run's **Artifacts** section.
+Pushing a `v*` tag additionally publishes a GitHub Release with the installers
+for all three platforms attached.
 
 The Windows installer is a standard wizard: choose the folder, then Install.
 It is unsigned, so Windows SmartScreen warns on first launch — choose
