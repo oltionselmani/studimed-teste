@@ -432,6 +432,7 @@ test.describe('seeded walkthrough', () => {
   test('one student cannot reach another student\'s exam', async ({ page }) => {
     await signIn(page);
     const examId = await openDataStructures(page);
+    const attemptId = await mockAttemptId(page, examId);
 
     // A second account, created fresh, must not see the first account's data.
     await page.goto('/dashboard');
@@ -449,7 +450,25 @@ test.describe('seeded walkthrough', () => {
     await page.getByRole('button', { name: 'Create account' }).click();
     await page.waitForURL('**/dashboard', { timeout: 60_000 });
 
-    const response = await page.goto(`/exams/${examId}`);
-    expect(response?.status()).toBe(404);
+    // Every route that takes someone else's id must refuse, including the
+    // printable documents and anything hanging off an attempt.
+    for (const path of [
+      `/exams/${examId}`,
+      `/exams/${examId}/material`,
+      `/exams/${examId}/plan`,
+      `/exams/${examId}/mistakes`,
+      `/exams/${examId}/report`,
+      `/print/report/${examId}`,
+      `/print/mistakes/${examId}`,
+      `/attempts/${attemptId}`,
+      `/attempts/${attemptId}/result`,
+      `/attempts/${attemptId}/scan`,
+      `/attempts/${attemptId}/take`,
+      `/print/exam/${attemptId}`,
+      `/print/answerkey/${attemptId}`,
+    ]) {
+      const response = await page.goto(path);
+      expect(response?.status(), `${path} should not be readable`).toBe(404);
+    }
   });
 });

@@ -139,6 +139,13 @@ export function requiredExamPercentage(
 ): { percent: number | null; confidence: Confidence } {
   const targetPercent = gradeToMinPercent(exam.target_grade, bands);
 
+  // The student told us they do not know how their course converts marks into
+  // grades. The figure below is still needed to plan against, but it rests on
+  // a conversion nobody has confirmed, so it is reported as unknown.
+  if (exam.grading_scale === 'unknown') {
+    return { percent: targetPercent, confidence: 'unknown' };
+  }
+
   if (exam.exam_weight === null || exam.exam_weight <= 0 || exam.current_grade === null) {
     // Without weighting information the honest answer is: the exam itself has
     // to reach the target level.

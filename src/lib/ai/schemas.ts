@@ -230,7 +230,6 @@ export const ResearchFindingsSchema = z.object({
       z.object({
         title: z.string().max(240),
         url: z.string().max(600),
-        snippet: z.string().max(600),
         relevance: z.enum(['previous_exam', 'related', 'unverified']),
         note: z
           .string()

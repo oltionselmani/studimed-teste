@@ -3,7 +3,7 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { requireUser } from '@/lib/auth/session';
-import { all, persist } from '@/lib/db';
+import { persist } from '@/lib/db';
 import { getExam, listMastery, listTopics, prioritiseTopics } from '@/lib/data/exams';
 import { listMaterials, listPreviousExams } from '@/lib/data/materials';
 import {
@@ -275,12 +275,4 @@ export async function retestTopicAction(formData: FormData): Promise<void> {
   const search = new URLSearchParams({ kind: 'targeted' });
   if (topic) search.set('topic', topic);
   redirect(`/exams/${examId}/tests?${search.toString()}`);
-}
-
-export async function countGradedAttempts(examId: string): Promise<number> {
-  const rows = await all<{ count: number }>(
-    "SELECT COUNT(*) AS count FROM attempts WHERE exam_id = ? AND status = 'graded'",
-    [examId],
-  );
-  return rows[0]?.count ?? 0;
 }

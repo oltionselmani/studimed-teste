@@ -133,6 +133,15 @@ test('a high current grade lowers what the exam itself has to reach', () => {
   assert.equal(requiredExamPercentage(exam, DEFAULT_BANDS_10).percent, 60);
 });
 
+test('an unconfirmed grading scale is reported as unknown, not as an estimate', () => {
+  const exam = makeExam({ grading_scale: 'unknown' });
+  const result = requiredExamPercentage(exam, DEFAULT_BANDS_10);
+  // A figure is still produced — there has to be something to plan against —
+  // but it must not be presented as an inference the app stands behind.
+  assert.equal(result.percent, 90);
+  assert.equal(result.confidence, 'unknown');
+});
+
 test('an unknown weight falls back to the target level, and says it is an estimate', () => {
   const exam = makeExam({ exam_weight: null, current_grade: null });
   const result = requiredExamPercentage(exam, DEFAULT_BANDS_10);

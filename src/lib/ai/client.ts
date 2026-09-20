@@ -141,6 +141,9 @@ export async function withWebSearch(params: {
     system: params.system,
     tools: [
       {
+        // The basic search variant, rather than the newer filtered one, because
+        // EXAMOS_MODEL is configurable and this variant is accepted by every
+        // model that supports search at all.
         type: 'web_search_20250305',
         name: 'web_search',
         max_uses: params.maxUses ?? 6,

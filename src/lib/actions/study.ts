@@ -7,7 +7,6 @@ import {
   getExam,
   listExams,
   listMastery,
-  listTopics,
   loadExamSnapshot,
   prioritiseTopics,
 } from '@/lib/data/exams';
@@ -173,8 +172,4 @@ export async function setMistakeStatusAction(formData: FormData): Promise<void> 
   );
   await persist();
   revalidatePath(`/exams/${examId}/mistakes`);
-}
-
-export async function listTopicNames(examId: string): Promise<string[]> {
-  return (await listTopics(examId)).map((topic) => topic.name);
 }

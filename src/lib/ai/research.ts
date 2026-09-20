@@ -7,7 +7,8 @@ import type { Exam } from '@/lib/types';
 interface RawResult {
   title: string;
   url: string;
-  snippet: string;
+  /** Publication date as reported by the search tool, when it reports one. */
+  pageAge: string;
 }
 
 /**
@@ -64,7 +65,9 @@ Try several phrasings, including the course name with the university name, the c
       raw.push({
         title: String(entry.title ?? ''),
         url: String(entry.url ?? ''),
-        snippet: String(entry.encrypted_content ? '' : (entry.page_age ?? '')),
+        // Search results carry a title, a URL and a publication date — not a
+        // text extract. The date is kept as the only extra fact available.
+        pageAge: entry.page_age ? String(entry.page_age) : '',
       });
     }
   }
@@ -111,7 +114,12 @@ The search assistant reported:
 ${prose.slice(0, 4000)}
 
 Raw search results:
-${raw.map((result, index) => `[${index}] ${result.title}\n    ${result.url}`).join('\n')}`,
+${raw
+  .map(
+    (result, index) =>
+      `[${index}] ${result.title}\n    ${result.url}${result.pageAge ? `\n    published: ${result.pageAge}` : ''}`,
+  )
+  .join('\n')}`,
       },
     ],
   });

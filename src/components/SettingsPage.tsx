@@ -136,7 +136,16 @@ export function SettingsPage({
             )}
 
             {!apiKeyFromEnv ? (
-              <Field label={d.settings.apiKey} hint={d.settings.apiKeyHelp} htmlFor="apiKey">
+              <Field
+                label={d.settings.apiKey}
+                hint={
+                  <>
+                    {d.settings.apiKeyHelp}
+                    <span className="mt-1 block">{d.settings.apiKeyShared}</span>
+                  </>
+                }
+                htmlFor="apiKey"
+              >
                 <input
                   id="apiKey"
                   name="apiKey"
