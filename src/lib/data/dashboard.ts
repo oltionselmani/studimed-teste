@@ -1,14 +1,18 @@
 import 'server-only';
 import { all } from '@/lib/db';
-import { computeReadiness, timeLeftUntil, type ReadinessResult } from '@/lib/engine/readiness';
+import { timeLeftUntil, type ReadinessResult } from '@/lib/engine/readiness';
 import { listExams } from './exams';
-import type { Attempt, Exam, StudyTask, Topic, TopicMastery } from '@/lib/types';
+import { loadPartSnapshot } from './part-snapshot';
+import type { Attempt, Exam, StudyTask } from '@/lib/types';
 
 export interface DashboardExam {
   exam: Exam;
   readiness: ReadinessResult;
   nextAction: NextAction;
   attemptCount: number;
+  /** The sitting being measured, when the exam is split into kolokviums. */
+  partName: string | null;
+  partId: string | null;
 }
 
 export type NextAction =
@@ -34,8 +38,12 @@ function decideNextAction(params: {
   topicCount: number;
   openTask: StudyTask | null;
   hasPlan: boolean;
+  partId: string | null;
 }): NextAction {
   const { exam, readiness, attempts } = params;
+  // Links carry the sitting through, so acting on the dashboard lands on the
+  // same part the figure was measured for.
+  const suffix = params.partId ? `?part=${params.partId}` : '';
   const base = `/exams/${exam.id}`;
 
   const unfinished = attempts.find((attempt) => attempt.status === 'in_progress');
@@ -58,14 +66,14 @@ function decideNextAction(params: {
       ? { kind: 'upload_material', href: `${base}/material` }
       : { kind: 'analyse_material', href: `${base}/material` };
   }
-  if (readiness.gradedAttempts === 0) return { kind: 'take_diagnostic', href: `${base}/tests` };
+  if (readiness.gradedAttempts === 0) return { kind: 'take_diagnostic', href: `${base}/tests${suffix}` };
 
-  if (readiness.timeLeft.days <= 3) return { kind: 'final_mock', href: `${base}/tests` };
-  if (!params.hasPlan) return { kind: 'build_plan', href: `${base}/plan` };
+  if (readiness.timeLeft.days <= 3) return { kind: 'final_mock', href: `${base}/tests${suffix}` };
+  if (!params.hasPlan) return { kind: 'build_plan', href: `${base}/plan${suffix}` };
   if (params.openTask) {
     return {
       kind: 'study_task',
-      href: `${base}/plan`,
+      href: `${base}/plan${suffix}`,
       title: params.openTask.title,
       minutes: params.openTask.minutes,
     };
@@ -73,9 +81,9 @@ function decideNextAction(params: {
 
   const weakest = readiness.weakTopics[0] ?? null;
   if (weakest) {
-    return { kind: 'practise_weak', href: `${base}/tests`, topic: weakest.topic };
+    return { kind: 'practise_weak', href: `${base}/tests${suffix}`, topic: weakest.topic };
   }
-  return { kind: 'final_mock', href: `${base}/tests` };
+  return { kind: 'final_mock', href: `${base}/tests${suffix}` };
 }
 
 export async function loadDashboard(userId: string): Promise<DashboardExam[]> {
@@ -83,10 +91,13 @@ export async function loadDashboard(userId: string): Promise<DashboardExam[]> {
   const result: DashboardExam[] = [];
 
   for (const exam of exams) {
-    const [attempts, mastery, topics, materials, tasks, plans] = await Promise.all([
+    // Measured through the same path the exam page uses, so a split course
+    // never reads one way on the dashboard and another way inside.
+    const snapshot = await loadPartSnapshot(userId, exam.id);
+    if (!snapshot) continue;
+
+    const [attempts, materials, tasks, plans] = await Promise.all([
       all<Attempt>('SELECT * FROM attempts WHERE exam_id = ?', [exam.id]),
-      all<TopicMastery>('SELECT * FROM topic_mastery WHERE exam_id = ?', [exam.id]),
-      all<Topic>('SELECT * FROM topics WHERE exam_id = ?', [exam.id]),
       all<{ id: string }>('SELECT id FROM materials WHERE exam_id = ?', [exam.id]),
       all<StudyTask>(
         `SELECT t.* FROM study_tasks t
@@ -100,25 +111,23 @@ export async function loadDashboard(userId: string): Promise<DashboardExam[]> {
       ]),
     ]);
 
-    const readiness = computeReadiness({
-      exam,
-      attempts,
-      mastery,
-      topicNames: topics.map((topic) => topic.name),
-    });
+    const readiness = snapshot.readiness;
 
     result.push({
       exam,
       readiness,
       attemptCount: attempts.length,
+      partName: snapshot.isSplit ? snapshot.part.name : null,
+      partId: snapshot.isSplit ? snapshot.part.id : null,
       nextAction: decideNextAction({
         exam,
         readiness,
         attempts,
         materialCount: materials.length,
-        topicCount: topics.length,
+        topicCount: snapshot.allTopics.length,
         openTask: tasks[0] ?? null,
         hasPlan: plans.length > 0,
+        partId: snapshot.isSplit ? snapshot.part.id : null,
       }),
     });
   }

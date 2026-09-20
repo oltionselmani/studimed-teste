@@ -3,13 +3,8 @@
 import { revalidatePath } from 'next/cache';
 import { requireUser } from '@/lib/auth/session';
 import { persist } from '@/lib/db';
-import {
-  getExam,
-  listExams,
-  listMastery,
-  loadExamSnapshot,
-  prioritiseTopics,
-} from '@/lib/data/exams';
+import { getExam, listExams, listMastery, listTopics, prioritiseTopics } from '@/lib/data/exams';
+import { loadPartSnapshot } from '@/lib/data/part-snapshot';
 import { listMaterials } from '@/lib/data/materials';
 import {
   deleteStudySheet,
@@ -38,16 +33,24 @@ export async function generatePlanAction(
 ): Promise<ActionResult> {
   const user = await requireUser();
   const examId = String(formData.get('exam_id') ?? '');
-  const snapshot = await loadExamSnapshot(user.id, examId);
+  const partId = String(formData.get('part_id') ?? '').trim() || null;
+  const snapshot = await loadPartSnapshot(user.id, examId, partId);
   if (!snapshot) return { error: 'notFound' };
   if (!(await aiAvailable())) return { error: 'aiUnavailable' };
 
-  const { exam, readiness, topics, mastery } = snapshot;
+  const { exam, readiness, mastery, part, isSplit } = snapshot;
   if (readiness.gradedAttempts === 0) return { error: 'noQuestions' };
 
-  const priorities = prioritiseTopics(topics, mastery, 6);
+  // The plan covers the sitting the student is working towards, not the whole
+  // course: hours spent on kolokvium 2's material before kolokvium 1 are hours
+  // spent on the wrong thing.
+  const inScope = new Set(snapshot.topics);
+  const scopedTopics = snapshot.allTopics.filter((topic) => inScope.has(topic.name));
+
+  const priorities = prioritiseTopics(scopedTopics, mastery, 6);
   const mistakes = (await listMistakes(user.id, examId)).filter(
-    (mistake) => mistake.status !== 'resolved',
+    (mistake) =>
+      mistake.status !== 'resolved' && (!isSplit || inScope.has(mistake.topic_name)),
   );
 
   const otherExams = (await listExams(user.id))
@@ -63,11 +66,12 @@ export async function generatePlanAction(
 
   try {
     const output = await generateStudyPlan({
-      exam,
+      // The countdown the plan works to is this sitting's date.
+      exam: { ...exam, exam_date: part.exam_date, exam_time: part.exam_time },
       readiness,
       priorities,
       mistakes,
-      topicNames: topics.map((topic) => topic.name),
+      topicNames: snapshot.topics,
       horizonDays,
       locale: user.locale,
       otherExams,

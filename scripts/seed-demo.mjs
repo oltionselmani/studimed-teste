@@ -135,8 +135,8 @@ const mastery = {
   Queues: 0.72,
   Trees: 0.62,
   Graphs: 0.44,
-  Sorting: 0.68,
-  Searching: 0.71,
+  Sorting: 0.84,
+  Searching: 0.88,
   'Big-O Complexity': 0.38,
 };
 
@@ -375,6 +375,49 @@ for (const [index, question] of readyQuestions.entries()) {
   );
 }
 
+// ---- A course examined in two kolokviums -----------------------------------
+// The first covers the first half of the syllabus and has already been sat;
+// the second covers the rest. This is the shape the split feature exists for.
+const partOneId = randomUUID();
+const partTwoId = randomUUID();
+
+run(
+  `INSERT INTO exam_parts (
+     id, exam_id, user_id, name, kind, position, exam_date, exam_time,
+     weight, target_grade, topics_json, result_percent, result_grade,
+     status, notes, created_at
+   ) VALUES (?, ?, ?, 'Kolokviumi 1', 'midterm', 0, ?, '09:00', 50, 10, ?, 72, 8,
+             'taken', '', ?)`,
+  [
+    partOneId,
+    examId,
+    userId,
+    daysFromNow(-9).toISOString().slice(0, 10),
+    JSON.stringify(['Arrays', 'Linked Lists', 'Stacks', 'Queues']),
+    iso(now),
+  ],
+);
+
+run(
+  `INSERT INTO exam_parts (
+     id, exam_id, user_id, name, kind, position, exam_date, exam_time,
+     weight, target_grade, topics_json, result_percent, result_grade,
+     status, notes, created_at
+   ) VALUES (?, ?, ?, 'Kolokviumi 2', 'final', 1, ?, '09:00', 50, 10, ?, NULL, NULL,
+             'upcoming', '', ?)`,
+  [
+    partTwoId,
+    examId,
+    userId,
+    daysFromNow(17).toISOString().slice(0, 10),
+    JSON.stringify(['Trees', 'Graphs', 'Sorting', 'Searching', 'Big-O Complexity']),
+    iso(now),
+  ],
+);
+
+// The unsat mock belongs to the sitting that is still ahead.
+run('UPDATE attempts SET part_id = ? WHERE id = ?', [partTwoId, readyAttemptId]);
+
 // ---- Mistake book ----------------------------------------------------------
 const mistakes = [
   [
@@ -447,8 +490,8 @@ run(
       { topic: 'Trees', mastery: 0.62 },
     ]),
     JSON.stringify([
-      { topic: 'Arrays', reason: 'At 91% across three tests — well past what your target needs.' },
-      { topic: 'Linked Lists', reason: 'At 84% and stable. A single review pass is enough.' },
+      { topic: 'Searching', reason: 'At 88% across three tests — well past what your target needs.' },
+      { topic: 'Sorting', reason: 'At 84% and stable. A single review pass is enough.' },
     ]),
   ],
 );

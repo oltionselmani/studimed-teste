@@ -12,7 +12,8 @@ import {
 } from '@/lib/actions/exams';
 import { Button, Card, CardHeader, Notice, inputClass } from '@/components/ui/primitives';
 import type { GradeBand } from '@/lib/engine/grading-scale';
-import type { Exam } from '@/lib/types';
+import { PartsManager } from '@/components/PartsManager';
+import type { Exam, ExamPart, Topic } from '@/lib/types';
 
 function SaveBands() {
   const { pending } = useFormStatus();
@@ -24,7 +25,19 @@ function SaveBands() {
   );
 }
 
-export function ExamSettings({ exam, bands }: { exam: Exam; bands: GradeBand[] }) {
+export function ExamSettings({
+  exam,
+  bands,
+  parts,
+  topics,
+  uncovered,
+}: {
+  exam: Exam;
+  bands: GradeBand[];
+  parts: ExamPart[];
+  topics: Topic[];
+  uncovered: string[];
+}) {
   const { d } = useI18n();
   const [bandState, saveBands] = useActionState<ExamFormState, FormData>(
     updateGradeBandsAction,
@@ -35,6 +48,8 @@ export function ExamSettings({ exam, bands }: { exam: Exam; bands: GradeBand[] }
   return (
     <div className="space-y-6">
       <ExamForm exam={exam} />
+
+      <PartsManager exam={exam} parts={parts} topics={topics} uncovered={uncovered} />
 
       <Card>
         <CardHeader title={d.exam.gradeBandsTitle} subtitle={d.exam.gradeBandsHelp} />

@@ -41,9 +41,66 @@ export async function listScanPages(attemptId: string): Promise<ScanPage[]> {
   ]);
 }
 
+/**
+ * Re-scores graded attempts over only the given topics.
+ *
+ * A diagnostic that spanned the whole course still says something about
+ * kolokvium 1 — but only through the questions that were on kolokvium 1's
+ * topics. Rather than discarding those attempts or counting them whole, each
+ * one is re-totalled over the questions in scope, and attempts with nothing in
+ * scope drop out entirely.
+ *
+ * Answers that could not be read are excluded from both sides, exactly as they
+ * are in the whole-course figures.
+ */
+export async function attemptsScopedToTopics(
+  examId: string,
+  topics: string[],
+): Promise<Attempt[]> {
+  const attempts = await all<Attempt>(
+    "SELECT * FROM attempts WHERE exam_id = ? AND status = 'graded' ORDER BY created_at ASC",
+    [examId],
+  );
+  if (attempts.length === 0 || topics.length === 0) return attempts;
+
+  const rows = await all<{
+    attempt_id: string;
+    topic_name: string;
+    points: number;
+    awarded: number;
+  }>(
+    `SELECT q.attempt_id AS attempt_id, q.topic_name AS topic_name, q.points AS points,
+            COALESCE(a.awarded_points, 0) AS awarded
+     FROM questions q
+     JOIN attempts t ON t.id = q.attempt_id
+     LEFT JOIN answers a ON a.question_id = q.id
+     WHERE q.exam_id = ? AND t.status = 'graded' AND COALESCE(a.verdict, '') != 'uncertain'`,
+    [examId],
+  );
+
+  const inScope = new Set(topics);
+  const totals = new Map<string, { earned: number; possible: number }>();
+  for (const row of rows) {
+    if (!inScope.has(row.topic_name)) continue;
+    const entry = totals.get(row.attempt_id) ?? { earned: 0, possible: 0 };
+    entry.earned += row.awarded;
+    entry.possible += row.points;
+    totals.set(row.attempt_id, entry);
+  }
+
+  const scoped: Attempt[] = [];
+  for (const attempt of attempts) {
+    const entry = totals.get(attempt.id);
+    if (!entry || entry.possible <= 0) continue;
+    scoped.push({ ...attempt, earned_points: entry.earned, total_points: entry.possible });
+  }
+  return scoped;
+}
+
 export async function createAttempt(params: {
   userId: string;
   examId: string;
+  partId: string | null;
   kind: AttemptKind;
   title: string;
   difficulty: Difficulty;
@@ -58,13 +115,14 @@ export async function createAttempt(params: {
   await transaction(async () => {
     await run(
       `INSERT INTO attempts (
-         id, exam_id, user_id, kind, title, difficulty, delivery, status,
+         id, exam_id, user_id, part_id, kind, title, difficulty, delivery, status,
          time_limit_minutes, focus_topics, total_points, created_at
-       ) VALUES (?, ?, ?, ?, ?, ?, 'undecided', 'ready', ?, ?, ?, ?)`,
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, 'undecided', 'ready', ?, ?, ?, ?)`,
       [
         attemptId,
         params.examId,
         params.userId,
+        params.partId,
         params.kind,
         params.title,
         params.difficulty,

@@ -109,9 +109,11 @@ export function ReadinessPanel({
                 <EvidenceTag confidence={factor.confidence} />
                 {factor.key === 'required_exam_performance' ? (
                   <span className="basis-full pl-5 text-xs text-[var(--text-subtle)]">
-                    {factor.params?.basis === 'weighted'
-                      ? d.readiness.factors.required_basis_weighted
-                      : d.readiness.factors.required_basis_target_only}
+                    {factor.params?.basis === 'part'
+                      ? d.readiness.factors.required_basis_part
+                      : factor.params?.basis === 'weighted'
+                        ? d.readiness.factors.required_basis_weighted
+                        : d.readiness.factors.required_basis_target_only}
                   </span>
                 ) : null}
               </li>

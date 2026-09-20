@@ -51,6 +51,37 @@ CREATE TABLE IF NOT EXISTS exams (
 );
 CREATE INDEX IF NOT EXISTS idx_exams_user ON exams(user_id, archived, exam_date);
 
+-- An exam is assessed in one or more parts. A course examined by two
+-- kolokviums and a final has three; a course with a single sitting has one,
+-- created automatically from the exam itself.
+--
+-- Each part covers a subset of the course topics, has its own date and weight,
+-- and is measured on its own — so "am I ready for kolokvium 1" is answered
+-- from the topics kolokvium 1 actually covers, not from the whole course.
+CREATE TABLE IF NOT EXISTS exam_parts (
+  id             TEXT PRIMARY KEY,
+  exam_id        TEXT NOT NULL REFERENCES exams(id) ON DELETE CASCADE,
+  user_id        TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name           TEXT NOT NULL,
+  kind           TEXT NOT NULL DEFAULT 'midterm',  -- midterm | final | other
+  position       INTEGER NOT NULL DEFAULT 0,
+  exam_date      TEXT NOT NULL,
+  exam_time      TEXT NOT NULL DEFAULT '',
+  weight         REAL,                             -- percent of the course grade
+  target_grade   REAL,                             -- optional per-part target
+  -- Topic names this part covers, as a JSON array. Empty means "everything
+  -- not claimed by another part".
+  topics_json    TEXT NOT NULL DEFAULT '',
+  -- Filled in once the part has actually been sat, so the remaining parts can
+  -- be planned against what is already banked.
+  result_percent REAL,
+  result_grade   REAL,
+  status         TEXT NOT NULL DEFAULT 'upcoming', -- upcoming | taken
+  notes          TEXT NOT NULL DEFAULT '',
+  created_at     TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_parts_exam ON exam_parts(exam_id, position);
+
 CREATE TABLE IF NOT EXISTS materials (
   id               TEXT PRIMARY KEY,
   exam_id          TEXT NOT NULL REFERENCES exams(id) ON DELETE CASCADE,
@@ -126,6 +157,8 @@ CREATE TABLE IF NOT EXISTS attempts (
   id                 TEXT PRIMARY KEY,
   exam_id            TEXT NOT NULL REFERENCES exams(id) ON DELETE CASCADE,
   user_id            TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  -- Which part of the exam this test was generated for, when it was scoped.
+  part_id            TEXT REFERENCES exam_parts(id) ON DELETE SET NULL,
   kind               TEXT NOT NULL,             -- diagnostic|targeted|mock|mistake_review
   title              TEXT NOT NULL,
   difficulty         TEXT NOT NULL DEFAULT 'university',

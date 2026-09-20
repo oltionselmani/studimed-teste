@@ -18,6 +18,7 @@ import {
   startAttempt,
 } from '@/lib/data/attempts';
 import { listMistakes } from '@/lib/data/study';
+import { effectiveTopics, ensureParts, getPart } from '@/lib/data/parts';
 import { generateQuestions } from '@/lib/ai/exam-generation';
 import { gradeDeterministically, gradeWrittenAnswers, type GradedAnswer } from '@/lib/ai/grading';
 import { aiAvailable } from '@/lib/ai/client';
@@ -60,6 +61,14 @@ export async function generateAttemptAction(
     .map((value) => String(value))
     .filter(Boolean);
 
+  // A test is generated for one part of the exam. Questions never stray
+  // outside the topics that part actually covers — practising for kolokvium 1
+  // on kolokvium 2's material is worse than useless.
+  const requestedPartId = String(formData.get('part_id') ?? '').trim();
+  const parts = await ensureParts(exam);
+  const part = requestedPartId ? await getPart(user.id, requestedPartId) : null;
+  const partId = part && part.exam_id === examId ? part.id : null;
+
   const [materials, topics, mastery, mistakes, previousExams] = await Promise.all([
     listMaterials(examId),
     listTopics(examId),
@@ -70,6 +79,11 @@ export async function generateAttemptAction(
 
   if (topics.length === 0) return { error: 'noMaterial' };
 
+  const allTopicNames = topics.map((topic) => topic.name);
+  const scopeTopics =
+    part !== null ? effectiveTopics(part, parts, allTopicNames) : allTopicNames;
+  if (scopeTopics.length === 0) return { error: 'noMaterial' };
+
   const masteryMap: Record<string, number> = {};
   for (const row of mastery) {
     if (row.mastery !== null) masteryMap[row.topic_name] = row.mastery;
@@ -77,12 +91,17 @@ export async function generateAttemptAction(
 
   // When the student did not pick topics, the deterministic priority order
   // decides — not the model.
+  const inScope = new Set(scopeTopics);
   const focusTopics =
     requestedTopics.length > 0
-      ? requestedTopics
+      ? requestedTopics.filter((topic) => inScope.has(topic))
       : kind === 'diagnostic'
         ? []
-        : prioritiseTopics(topics, mastery, 4).map((entry) => entry.topic);
+        : prioritiseTopics(
+            topics.filter((topic) => inScope.has(topic.name)),
+            mastery,
+            4,
+          ).map((entry) => entry.topic);
 
   const analysed = previousExams.find((paper) => paper.analysis_json);
 
@@ -95,10 +114,10 @@ export async function generateAttemptAction(
       difficulty,
       questionCount,
       focusTopics,
-      allTopics: topics.map((topic) => topic.name),
+      allTopics: scopeTopics,
       mastery: masteryMap,
       recurringMistakes: mistakes
-        .filter((mistake) => mistake.status !== 'resolved')
+        .filter((mistake) => mistake.status !== 'resolved' && inScope.has(mistake.topic_name))
         .slice(0, 15)
         .map((mistake) => ({
           topic: mistake.topic_name,
@@ -112,8 +131,9 @@ export async function generateAttemptAction(
     const attemptId = await createAttempt({
       userId: user.id,
       examId,
+      partId,
       kind,
-      title: titleFor(kind, exam.course_name, focusTopics),
+      title: titleFor(kind, part?.name ?? exam.course_name, focusTopics),
       difficulty,
       timeLimitMinutes: timeLimit,
       focusTopics,

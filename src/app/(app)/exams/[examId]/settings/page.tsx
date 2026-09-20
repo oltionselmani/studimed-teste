@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import { requireUser } from '@/lib/auth/session';
-import { getExam } from '@/lib/data/exams';
+import { getExam, listTopics } from '@/lib/data/exams';
+import { ensureParts, uncoveredTopics } from '@/lib/data/parts';
 import { readBands } from '@/lib/engine/grading-scale';
 import { ExamSettings } from '@/components/ExamSettings';
 
@@ -13,5 +14,15 @@ export default async function Page({ params }: { params: Promise<{ examId: strin
   const exam = await getExam(user.id, examId);
   if (!exam) notFound();
 
-  return <ExamSettings exam={exam} bands={readBands(exam)} />;
+  const [parts, topics] = await Promise.all([ensureParts(exam), listTopics(examId)]);
+
+  return (
+    <ExamSettings
+      exam={exam}
+      bands={readBands(exam)}
+      parts={parts}
+      topics={topics}
+      uncovered={uncoveredTopics(parts, topics)}
+    />
+  );
 }

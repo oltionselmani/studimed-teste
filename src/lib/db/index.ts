@@ -2,6 +2,7 @@ import 'server-only';
 import { readFileSync, writeFileSync, renameSync, existsSync } from 'node:fs';
 import initSqlJs, { type Database, type SqlJsStatic } from 'sql.js';
 import { SCHEMA_SQL } from './schema';
+import { runMigrations } from './migrations';
 import { databaseFile, sqlWasmFile } from './paths';
 
 /**
@@ -47,6 +48,9 @@ async function open(): Promise<Database> {
 
   handle.run('PRAGMA foreign_keys = ON;');
   handle.run(SCHEMA_SQL);
+  // Columns added after a database was first created are not covered by
+  // CREATE TABLE IF NOT EXISTS, so they are applied here.
+  runMigrations(handle);
   flushNow();
   return handle;
 }

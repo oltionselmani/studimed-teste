@@ -100,6 +100,33 @@ export interface TopicItem {
   position: number;
 }
 
+export type ExamPartKind = 'midterm' | 'final' | 'other';
+
+/**
+ * One assessed sitting of a course: a kolokvium, a final, or a single exam.
+ * An exam always has at least one; a course examined in halves has two or more,
+ * each covering its own slice of the topics.
+ */
+export interface ExamPart {
+  id: string;
+  exam_id: string;
+  user_id: string;
+  name: string;
+  kind: ExamPartKind;
+  position: number;
+  exam_date: string;
+  exam_time: string;
+  weight: number | null;
+  target_grade: number | null;
+  /** JSON array of topic names. Empty means every topic no other part claims. */
+  topics_json: string;
+  result_percent: number | null;
+  result_grade: number | null;
+  status: 'upcoming' | 'taken';
+  notes: string;
+  created_at: string;
+}
+
 export type AttemptKind = 'diagnostic' | 'targeted' | 'mock' | 'mistake_review';
 export type Difficulty = 'easy' | 'medium' | 'hard' | 'university' | 'previous_exam_style';
 
@@ -107,6 +134,7 @@ export interface Attempt {
   id: string;
   exam_id: string;
   user_id: string;
+  part_id: string | null;
   kind: AttemptKind;
   title: string;
   difficulty: Difficulty;

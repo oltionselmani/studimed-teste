@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
 import { requireUser } from '@/lib/auth/session';
-import { getExam, listMastery, listTopics } from '@/lib/data/exams';
+import { loadPartSnapshot } from '@/lib/data/part-snapshot';
 import { listAttempts } from '@/lib/data/attempts';
 import { listPreviousExams } from '@/lib/data/materials';
 import { listMistakes } from '@/lib/data/study';
@@ -16,28 +16,31 @@ export default async function Page({
   searchParams,
 }: {
   params: Promise<{ examId: string }>;
-  searchParams: Promise<{ kind?: string; topic?: string }>;
+  searchParams: Promise<{ kind?: string; topic?: string; part?: string }>;
 }) {
   const user = await requireUser();
   const { examId } = await params;
   const query = await searchParams;
-  const exam = await getExam(user.id, examId);
-  if (!exam) notFound();
 
-  const [topics, mastery, attempts, previousExams, mistakes, aiReady] = await Promise.all([
-    listTopics(examId),
-    listMastery(examId),
+  const snapshot = await loadPartSnapshot(user.id, examId, query.part);
+  if (!snapshot) notFound();
+
+  const [attempts, previousExams, mistakes, aiReady] = await Promise.all([
     listAttempts(examId),
     listPreviousExams(examId),
     listMistakes(user.id, examId),
     aiAvailable(),
   ]);
 
-  const timeLeft = timeLeftUntil(exam);
-  const graded = attempts.filter((attempt) => attempt.status === 'graded');
+  const timeLeft = timeLeftUntil({
+    exam_date: snapshot.part.exam_date,
+    exam_time: snapshot.part.exam_time,
+  });
+  const graded = snapshot.attempts.filter((attempt) => attempt.status === 'graded');
+  const inScope = new Set(snapshot.topics);
 
-  // A sensible default: baseline first, a full mock as the exam approaches,
-  // targeted practice in between.
+  // Baseline first, a full mock as the sitting approaches, targeted practice
+  // in between.
   const suggestedKind: AttemptKind =
     (query.kind as AttemptKind | undefined) ??
     (graded.length === 0 ? 'diagnostic' : timeLeft.days <= 4 ? 'mock' : 'targeted');
@@ -45,15 +48,23 @@ export default async function Page({
   return (
     <TestsPage
       examId={examId}
+      parts={snapshot.parts}
+      activePart={snapshot.part}
       aiReady={aiReady}
-      hasTopics={topics.length > 0}
+      hasTopics={snapshot.topics.length > 0}
       hasPreviousExams={previousExams.length > 0}
-      topics={topics}
-      mastery={mastery}
+      topics={snapshot.allTopics.filter((topic) => inScope.has(topic.name))}
+      mastery={snapshot.mastery}
       attempts={attempts}
       suggestedKind={suggestedKind}
       suggestedTopic={query.topic ?? null}
-      openMistakes={mistakes.filter((mistake) => mistake.status !== 'resolved').length}
+      openMistakes={
+        mistakes.filter(
+          (mistake) =>
+            mistake.status !== 'resolved' &&
+            (!snapshot.isSplit || inScope.has(mistake.topic_name)),
+        ).length
+      }
       daysLeft={timeLeft.days}
     />
   );

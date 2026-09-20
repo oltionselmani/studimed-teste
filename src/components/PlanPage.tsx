@@ -23,7 +23,15 @@ import {
   cx,
   inputClass,
 } from '@/components/ui/primitives';
-import type { Exam, StudyMaterialRow, StudyPlan, StudyTask, Topic } from '@/lib/types';
+import { PartSwitcher } from '@/components/PartSwitcher';
+import type {
+  Exam,
+  ExamPart,
+  StudyMaterialRow,
+  StudyPlan,
+  StudyTask,
+  Topic,
+} from '@/lib/types';
 
 interface Priority {
   topic: string;
@@ -32,6 +40,8 @@ interface Priority {
 
 interface Props {
   exam: Exam;
+  parts: ExamPart[];
+  activePart: ExamPart;
   plan: StudyPlan | null;
   tasks: StudyTask[];
   priorities: Priority[];
@@ -89,16 +99,21 @@ export function PlanPage(props: Props) {
 
   return (
     <div className="space-y-10">
+      <PartSwitcher parts={props.parts} active={props.activePart} examId={props.exam.id} />
+
       <section>
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <h2 className="text-xl font-semibold tracking-tight">
-              {t(d.plan.whatDoINeed, { target: props.exam.target_grade })}
+              {t(d.plan.whatDoINeed, {
+                target: props.activePart.target_grade ?? props.exam.target_grade,
+              })}
             </h2>
             <p className="mt-1 text-sm text-[var(--text-muted)]">{d.plan.updatedAfterTest}</p>
           </div>
           <form action={buildPlan}>
             <input type="hidden" name="exam_id" value={props.exam.id} />
+            <input type="hidden" name="part_id" value={props.activePart.id} />
             <PendingButton
               label={props.plan ? d.plan.regenerate : d.plan.generate}
               pendingLabel={d.plan.generating}
@@ -140,7 +155,7 @@ export function PlanPage(props: Props) {
                   </div>
                 </div>
                 <Link
-                  href={`/exams/${props.exam.id}/tests?kind=targeted&topic=${encodeURIComponent(priority.topic)}`}
+                  href={`/exams/${props.exam.id}/tests?kind=targeted&part=${props.activePart.id}&topic=${encodeURIComponent(priority.topic)}`}
                   className="shrink-0 text-sm font-medium text-[var(--accent-text)] hover:underline"
                 >
                   {d.results.testAgain}
@@ -164,7 +179,9 @@ export function PlanPage(props: Props) {
 
           <section>
             <SectionTitle hint={date(props.plan.generated_at, true)}>
-              {t(d.plan.planTitle, { target: props.exam.target_grade })}
+              {t(d.plan.planTitle, {
+                target: props.activePart.target_grade ?? props.exam.target_grade,
+              })}
             </SectionTitle>
             <div className="space-y-4">
               {dayIndexes.map((dayIndex) => (

@@ -1,4 +1,4 @@
-import type { Attempt, Exam, TopicMastery } from '@/lib/types';
+import type { Attempt, Exam, ExamPart, TopicMastery } from '@/lib/types';
 import { gradeToMinPercent, percentToGrade, readBands, type GradeBand } from './grading-scale';
 
 /**
@@ -160,12 +160,82 @@ export function requiredExamPercentage(
   return { percent: gradeToMinPercent(clamped, bands), confidence: 'estimate' };
 }
 
+/**
+ * What one part of the exam has to score, given the parts already sat.
+ *
+ * This is the question a student actually asks after a kolokvium: "I got 7 on
+ * the first one — what do I need on the second?" It is answerable only when the
+ * weights are known; when they are not, the honest fallback is the level the
+ * target grade requires outright.
+ */
+export function requiredPartPercentage(
+  exam: Exam,
+  part: ExamPart,
+  allParts: ExamPart[],
+  bands: GradeBand[],
+): { percent: number; confidence: Confidence; basis: 'banked' | 'weighted' | 'target_only' } {
+  const targetGrade = part.target_grade ?? exam.target_grade;
+  const targetPercent = gradeToMinPercent(targetGrade, bands);
+
+  // An unconfirmed grading scale makes every conversion below unverifiable.
+  if (exam.grading_scale === 'unknown') {
+    return { percent: targetPercent, confidence: 'unknown', basis: 'target_only' };
+  }
+
+  const weighted = allParts.filter((entry) => entry.weight !== null && entry.weight > 0);
+  const remaining = weighted.filter((entry) => entry.status !== 'taken');
+
+  // Without weights, or with nothing left to weigh against, the part simply has
+  // to reach the target level itself.
+  if (part.weight === null || part.weight <= 0 || remaining.length === 0) {
+    return { percent: targetPercent, confidence: 'estimate', basis: 'target_only' };
+  }
+
+  const totalPartWeight = weighted.reduce((sum, entry) => sum + (entry.weight ?? 0), 0) / 100;
+  const remainingWeight = remaining.reduce((sum, entry) => sum + (entry.weight ?? 0), 0) / 100;
+  if (remainingWeight <= 0) {
+    return { percent: targetPercent, confidence: 'estimate', basis: 'target_only' };
+  }
+
+  // Grade points already secured by parts that have been sat and recorded.
+  const taken = weighted.filter((entry) => entry.status === 'taken' && entry.result_grade !== null);
+  const banked = taken.reduce(
+    (sum, entry) => sum + (entry.result_grade as number) * ((entry.weight ?? 0) / 100),
+    0,
+  );
+
+  // Whatever the parts do not account for is other coursework. It can only be
+  // included when the student told us where they stand on it.
+  const otherWeight = Math.max(0, 1 - totalPartWeight);
+  if (otherWeight > 0.001 && exam.current_grade === null) {
+    return { percent: targetPercent, confidence: 'estimate', basis: 'weighted' };
+  }
+  const otherPoints = otherWeight > 0 ? (exam.current_grade ?? 0) * otherWeight : 0;
+
+  const neededFromRemaining = targetGrade - banked - otherPoints;
+  const gradeNeeded = neededFromRemaining / remainingWeight;
+  const clamped = Math.max(exam.grade_min, Math.min(exam.grade_max, gradeNeeded));
+
+  return {
+    percent: gradeToMinPercent(clamped, bands),
+    confidence: 'estimate',
+    basis: taken.length > 0 ? 'banked' : 'weighted',
+  };
+}
+
 export interface ReadinessInput {
   exam: Exam;
   attempts: Attempt[];
   mastery: TopicMastery[];
   topicNames: string[];
   now?: Date;
+  /**
+   * Overrides the whole-exam requirement, so a single part can be measured
+   * against what that part needs rather than what the course needs.
+   */
+  required?: { percent: number; confidence: Confidence };
+  /** Label shown against the requirement, e.g. the name of a kolokvium. */
+  scopeLabel?: string;
 }
 
 export function computeReadiness(input: ReadinessInput): ReadinessResult {
@@ -183,7 +253,7 @@ export function computeReadiness(input: ReadinessInput): ReadinessResult {
     percents.length > 0 ? percents.reduce((sum, value) => sum + value, 0) / percents.length : null;
 
   const targetPercent = gradeToMinPercent(exam.target_grade, bands);
-  const required = requiredExamPercentage(exam, bands);
+  const required = input.required ?? requiredExamPercentage(exam, bands);
   const needed = required.percent ?? targetPercent;
   const gap = recentAveragePercent === null ? null : recentAveragePercent - needed;
 
@@ -257,7 +327,15 @@ export function computeReadiness(input: ReadinessInput): ReadinessResult {
   factors.push({
     key: 'required_exam_performance',
     value: Math.round(needed * 10) / 10,
-    params: { basis: exam.exam_weight !== null && exam.current_grade !== null ? 'weighted' : 'target_only' },
+    params: {
+      basis:
+        input.required !== undefined
+          ? 'part'
+          : exam.exam_weight !== null && exam.current_grade !== null
+            ? 'weighted'
+            : 'target_only',
+      ...(input.scopeLabel ? { scope: input.scopeLabel } : {}),
+    },
     confidence: required.confidence,
     direction: 'neutral',
   });

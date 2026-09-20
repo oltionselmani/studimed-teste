@@ -124,9 +124,12 @@ function ExamCard({ entry }: { entry: DashboardExam }) {
             {exam.exam_time ? ` · ${exam.exam_time}` : ''}
           </p>
         </div>
-        <Pill tone="accent">
-          {d.exam.target} {exam.target_grade}
-        </Pill>
+        <div className="flex shrink-0 flex-wrap justify-end gap-2">
+          {entry.partName ? <Pill>{entry.partName}</Pill> : null}
+          <Pill tone="accent">
+            {d.exam.target} {exam.target_grade}
+          </Pill>
+        </div>
       </div>
 
       <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2">

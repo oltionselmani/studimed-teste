@@ -9,7 +9,18 @@ import type { Exam } from '@/lib/types';
  * The countdown ticks live. It is rendered from an ISO timestamp rather than a
  * server-computed string so it stays correct without a page refresh.
  */
-export function ExamHeader({ exam }: { exam: Exam }) {
+export function ExamHeader({
+  exam,
+  partName,
+  partDate,
+  partTime,
+}: {
+  exam: Exam;
+  /** Name of the sitting being counted down to, when the exam is split. */
+  partName?: string | null;
+  partDate?: string;
+  partTime?: string;
+}) {
   const { d, t, date } = useI18n();
   const [now, setNow] = useState<number | null>(null);
 
@@ -19,8 +30,10 @@ export function ExamHeader({ exam }: { exam: Exam }) {
     return () => clearInterval(timer);
   }, []);
 
+  const onDate = partDate ?? exam.exam_date;
+  const onTime = partTime ?? exam.exam_time;
   const target = new Date(
-    `${exam.exam_date}T${/^\d{2}:\d{2}$/.test(exam.exam_time) ? exam.exam_time : '09:00'}:00`,
+    `${onDate}T${/^\d{2}:\d{2}$/.test(onTime) ? onTime : '09:00'}:00`,
   ).getTime();
 
   const remaining = now === null ? null : target - now;
@@ -34,8 +47,8 @@ export function ExamHeader({ exam }: { exam: Exam }) {
         <div className="min-w-0">
           <h1 className="text-2xl font-semibold tracking-tight">{exam.course_name}</h1>
           <p className="tabular mt-1 text-sm text-[var(--text-muted)]">
-            {date(exam.exam_date)}
-            {exam.exam_time ? ` · ${exam.exam_time}` : ''}
+            {date(onDate)}
+            {onTime ? ` · ${onTime}` : ''}
             {exam.course_code ? ` · ${exam.course_code}` : ''}
             {exam.professor ? ` · ${exam.professor}` : ''}
           </p>
@@ -44,7 +57,7 @@ export function ExamHeader({ exam }: { exam: Exam }) {
           <Pill tone="accent">
             {d.exam.target} {exam.target_grade}
           </Pill>
-          {exam.exam_weight !== null ? (
+          {exam.exam_weight !== null && !partName ? (
             <Pill>
               {d.exam.weight} {exam.exam_weight}%
             </Pill>
@@ -60,6 +73,7 @@ export function ExamHeader({ exam }: { exam: Exam }) {
       <div className="mt-4">
         <div className="text-[11px] font-semibold uppercase tracking-[0.07em] text-[var(--text-subtle)]">
           {d.exam.timeLeft}
+          {partName ? ` · ${partName}` : ''}
         </div>
         <div
           className={cx(

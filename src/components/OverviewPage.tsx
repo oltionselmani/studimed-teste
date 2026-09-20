@@ -16,10 +16,13 @@ import {
 } from '@/components/ui/primitives';
 import type { NextAction } from '@/lib/data/dashboard';
 import type { ReadinessResult } from '@/lib/engine/readiness';
-import type { Attempt, Exam, TopicMastery } from '@/lib/types';
+import { PartSwitcher } from '@/components/PartSwitcher';
+import type { Attempt, Exam, ExamPart, TopicMastery } from '@/lib/types';
 
 export function OverviewPage({
   exam,
+  parts,
+  activePart,
   readiness,
   mastery,
   attempts,
@@ -29,6 +32,8 @@ export function OverviewPage({
   openMistakes,
 }: {
   exam: Exam;
+  parts: ExamPart[];
+  activePart: ExamPart;
   readiness: ReadinessResult;
   mastery: TopicMastery[];
   attempts: Attempt[];
@@ -70,12 +75,18 @@ export function OverviewPage({
 
   return (
     <div className="space-y-9">
+      <PartSwitcher parts={parts} active={activePart} examId={exam.id} />
+
       <div className="grid gap-5 lg:grid-cols-[1.4fr_1fr]">
         <Card className="p-6">
           <div className="mb-4 flex items-baseline justify-between gap-3">
             <h2 className="text-base font-semibold">{d.readiness.howScrewed}</h2>
           </div>
-          <ReadinessPanel readiness={readiness} targetGrade={exam.target_grade} tone={tone} />
+          <ReadinessPanel
+            readiness={readiness}
+            targetGrade={activePart.target_grade ?? exam.target_grade}
+            tone={tone}
+          />
         </Card>
 
         <div className="space-y-5">
@@ -100,7 +111,7 @@ export function OverviewPage({
                   : `≈ ${readiness.recentAverageGrade}`
               }
             />
-            <Stat label={d.exam.target} value={exam.target_grade} />
+            <Stat label={d.exam.target} value={activePart.target_grade ?? exam.target_grade} />
             <Stat
               label={d.readiness.coverageLabel}
               value={readiness.coverage === null ? '—' : `${Math.round(readiness.coverage * 100)}%`}
@@ -110,7 +121,7 @@ export function OverviewPage({
           </Card>
 
           <div className="flex flex-wrap gap-2">
-            <ButtonLink href={`/exams/${exam.id}/tests`} size="sm">
+            <ButtonLink href={`/exams/${exam.id}/tests?part=${activePart.id}`} size="sm">
               {d.generate.title}
             </ButtonLink>
             <ButtonLink href={`/exams/${exam.id}/plan`} variant="secondary" size="sm">

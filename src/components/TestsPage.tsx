@@ -18,10 +18,20 @@ import {
   cx,
   inputClass,
 } from '@/components/ui/primitives';
-import type { Attempt, AttemptKind, Difficulty, Topic, TopicMastery } from '@/lib/types';
+import { PartSwitcher } from '@/components/PartSwitcher';
+import type {
+  Attempt,
+  AttemptKind,
+  Difficulty,
+  ExamPart,
+  Topic,
+  TopicMastery,
+} from '@/lib/types';
 
 interface Props {
   examId: string;
+  parts: ExamPart[];
+  activePart: ExamPart;
   aiReady: boolean;
   hasTopics: boolean;
   hasPreviousExams: boolean;
@@ -104,6 +114,8 @@ export function TestsPage(props: Props) {
 
   return (
     <div className="space-y-10">
+      <PartSwitcher parts={props.parts} active={props.activePart} examId={props.examId} />
+
       <section>
         <SectionTitle>{d.generate.title}</SectionTitle>
 
@@ -120,6 +132,7 @@ export function TestsPage(props: Props) {
 
         <form action={action}>
           <input type="hidden" name="exam_id" value={props.examId} />
+          <input type="hidden" name="part_id" value={props.activePart.id} />
           <input type="hidden" name="kind" value={kind} />
           <input type="hidden" name="difficulty" value={difficulty} />
           {focus.map((topic) => (

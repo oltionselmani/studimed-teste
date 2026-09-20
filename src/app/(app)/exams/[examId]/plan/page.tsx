@@ -1,17 +1,25 @@
 import { notFound } from 'next/navigation';
 import { requireUser } from '@/lib/auth/session';
-import { loadExamSnapshot, prioritiseTopics } from '@/lib/data/exams';
+import { prioritiseTopics } from '@/lib/data/exams';
+import { loadPartSnapshot } from '@/lib/data/part-snapshot';
 import { currentPlan, listStudySheets, planTasks } from '@/lib/data/study';
 import { aiAvailable } from '@/lib/ai/client';
 import { PlanPage } from '@/components/PlanPage';
 
 export const dynamic = 'force-dynamic';
 
-export default async function Page({ params }: { params: Promise<{ examId: string }> }) {
+export default async function Page({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ examId: string }>;
+  searchParams: Promise<{ part?: string }>;
+}) {
   const user = await requireUser();
   const { examId } = await params;
+  const { part: partId } = await searchParams;
 
-  const snapshot = await loadExamSnapshot(user.id, examId);
+  const snapshot = await loadPartSnapshot(user.id, examId, partId);
   if (!snapshot) notFound();
 
   const plan = await currentPlan(examId);
@@ -30,14 +38,19 @@ export default async function Page({ params }: { params: Promise<{ examId: strin
     }
   }
 
+  const inScope = new Set(snapshot.topics);
+  const scopedTopics = snapshot.allTopics.filter((topic) => inScope.has(topic.name));
+
   return (
     <PlanPage
       exam={snapshot.exam}
+      parts={snapshot.parts}
+      activePart={snapshot.part}
       plan={plan}
       tasks={tasks}
-      priorities={prioritiseTopics(snapshot.topics, snapshot.mastery, 6)}
-      avoid={avoid}
-      topics={snapshot.topics}
+      priorities={prioritiseTopics(scopedTopics, snapshot.mastery, 6)}
+      avoid={avoid.filter((item) => !snapshot.isSplit || inScope.has(item.topic))}
+      topics={scopedTopics}
       sheets={sheets}
       aiReady={aiReady}
       hasResults={snapshot.readiness.gradedAttempts > 0}
