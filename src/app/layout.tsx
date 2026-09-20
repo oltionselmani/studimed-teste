@@ -7,11 +7,30 @@ export const metadata: Metadata = {
   title: 'ExamOS',
   description:
     'Measure how prepared you actually are for your exam, and know what to do next.',
+  applicationName: 'ExamOS',
+  manifest: '/manifest.webmanifest',
+  icons: {
+    icon: [
+      { url: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' },
+    ],
+    apple: [{ url: '/icons/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }],
+  },
+  appleWebApp: {
+    // Lets iOS open it from the home screen without Safari's chrome.
+    capable: true,
+    title: 'ExamOS',
+    statusBarStyle: 'black-translucent',
+  },
+  formatDetection: { telephone: false },
 };
 
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
+  // Stops iOS zooming when a field is focused during a timed exam, while
+  // leaving pinch-zoom available.
+  maximumScale: 5,
   viewportFit: 'cover',
   themeColor: [
     { media: '(prefers-color-scheme: light)', color: '#fbfbfd' },

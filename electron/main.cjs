@@ -9,7 +9,8 @@
  * application-data folder, so they survive reinstalls and upgrades.
  */
 
-const { app, BrowserWindow, Menu, dialog, shell } = require('electron');
+const { app, BrowserWindow, Menu, clipboard, dialog, shell } = require('electron');
+const os = require('node:os');
 const { spawn } = require('node:child_process');
 const net = require('node:net');
 const path = require('node:path');
@@ -18,6 +19,10 @@ const fs = require('node:fs');
 let serverProcess = null;
 let mainWindow = null;
 let serverUrl = null;
+let serverPort = null;
+// The server listens on the loopback address unless the student explicitly
+// opens it to their network, so nothing is reachable by default.
+let boundHost = '127.0.0.1';
 
 const isPackaged = app.isPackaged;
 
@@ -62,7 +67,17 @@ function waitForServer(url, timeoutMs = 60_000) {
   });
 }
 
-async function startServer() {
+/** The machine's address on the local network, for reaching it from a phone. */
+function lanAddress() {
+  for (const addresses of Object.values(os.networkInterfaces())) {
+    for (const address of addresses ?? []) {
+      if (address.family === 'IPv4' && !address.internal) return address.address;
+    }
+  }
+  return null;
+}
+
+async function startServer({ host = '127.0.0.1', port } = {}) {
   const directory = serverDirectory();
   const entry = path.join(directory, 'server.js');
 
@@ -72,7 +87,7 @@ async function startServer() {
     );
   }
 
-  const port = await freePort();
+  const chosenPort = port ?? (await freePort());
   const dataDir = path.join(app.getPath('userData'), 'data');
   fs.mkdirSync(dataDir, { recursive: true });
 
@@ -83,8 +98,8 @@ async function startServer() {
       // Run Electron's bundled Node as a plain Node process.
       ELECTRON_RUN_AS_NODE: '1',
       NODE_ENV: 'production',
-      PORT: String(port),
-      HOSTNAME: '127.0.0.1',
+      PORT: String(chosenPort),
+      HOSTNAME: host,
       EXAMOS_DATA_DIR: dataDir,
       EXAMOS_DESKTOP: '1',
     },
@@ -102,9 +117,67 @@ async function startServer() {
     }
   });
 
-  serverUrl = new URL(`http://127.0.0.1:${port}`);
+  serverPort = chosenPort;
+  boundHost = host;
+  // The window always talks to loopback, even when the server is also
+  // listening on the network for a phone.
+  serverUrl = new URL(`http://127.0.0.1:${chosenPort}`);
   await waitForServer(serverUrl);
   return serverUrl;
+}
+
+/**
+ * Opens the running server to the local network so a phone on the same Wi-Fi
+ * can use it — which is what makes photographing a printed exam practical.
+ *
+ * Off by default, and the dialog says plainly what it exposes: anyone on the
+ * same network can reach the sign-in page while it is on.
+ */
+async function shareToPhone() {
+  const address = lanAddress();
+  if (!address) {
+    await dialog.showMessageBox(mainWindow, {
+      type: 'info',
+      message: 'No network connection found',
+      detail:
+        'ExamOS could not find a local network address. Connect this computer to Wi-Fi and try again.',
+    });
+    return;
+  }
+
+  if (boundHost !== '0.0.0.0') {
+    const { response } = await dialog.showMessageBox(mainWindow, {
+      type: 'question',
+      buttons: ['Share', 'Cancel'],
+      defaultId: 0,
+      cancelId: 1,
+      message: 'Let your phone use ExamOS?',
+      detail:
+        'ExamOS will accept connections from other devices on this network until you close it. ' +
+        'Anyone on the same Wi-Fi will be able to reach the sign-in page, so they still need your ' +
+        'email and password. Your data stays on this computer.',
+    });
+    if (response !== 0) return;
+
+    if (serverProcess && !serverProcess.killed) serverProcess.kill();
+    try {
+      await startServer({ host: '0.0.0.0', port: serverPort ?? undefined });
+    } catch (error) {
+      dialog.showErrorBox('Could not share', String(error && error.message ? error.message : error));
+      return;
+    }
+  }
+
+  const url = `http://${address}:${serverPort}`;
+  clipboard.writeText(url);
+  await dialog.showMessageBox(mainWindow, {
+    type: 'info',
+    message: 'Open this on your phone',
+    detail:
+      `${url}\n\nThe address is on your clipboard. Open it in Safari or Chrome on your phone, ` +
+      'sign in, then use Share → Add to Home Screen to get an ExamOS icon.\n\n' +
+      'Sharing stops when you quit ExamOS.',
+  });
 }
 
 function createWindow(url) {
@@ -180,6 +253,8 @@ function buildMenu() {
           click: () => mainWindow?.webContents.print({}),
         },
         { label: 'Save as PDF…', accelerator: 'CmdOrCtrl+Shift+P', click: () => void saveAsPdf() },
+        { type: 'separator' },
+        { label: 'Share to my phone…', click: () => void shareToPhone() },
         { type: 'separator' },
         {
           label: 'Open data folder',

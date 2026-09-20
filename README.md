@@ -26,6 +26,7 @@ explanations; it never decides how ready you are.
 | | |
 |---|---|
 | **Create an exam** | Course, date, target grade, current standing, exam weight. A live countdown. |
+| **Split it into kolokviums** | An exam sat in parts: each with its own date, topics, weight and result. Everything below is then measured one sitting at a time. |
 | **Upload material** | PDF, Word, PowerPoint, plain text, and photos of handwritten notes. |
 | **Analyse the course** | Extracts topics, definitions, formulas, algorithms and terminology — each traced back to the file it came from. |
 | **Previous exams** | Analyses past papers you provide, and can run a real web search for public course documentation. |
@@ -74,6 +75,11 @@ reaching, however good your coverage and however much time is left.
 quotes a probability. It says your recent practice results are, or are not,
 consistent with the level your target requires.
 
+**A sitting is scored on what that sitting examines.** When an exam is split
+into kolokviums, readiness for one of them never borrows credit from material
+it does not cover: past tests are re-scored over that sitting's topics only,
+and questions outside them are dropped rather than counted.
+
 **"Not found" is not "does not exist".** When no past papers are available it
 says so, and says explicitly that this does not mean none exist.
 
@@ -86,6 +92,37 @@ rule, and you can edit it per exam.
 
 **No key, no invention.** Without an API key the AI features refuse with a
 clear message rather than producing placeholder content.
+
+---
+
+## Exams in parts (kolokviums)
+
+An exam does not have to be one sitting. Split it in **Settings → Exam parts**:
+give each part a name, a date, the topics it examines and what it is worth, and
+the app treats them as separate exams that add up to one grade.
+
+What changes once an exam is split:
+
+- The **countdown** runs to the next sitting, and says which one it is.
+- **Readiness, weak topics, generated tests and the study plan** cover that
+  sitting's topics only. A test you took earlier is re-scored over just the
+  questions in scope — it is neither thrown away nor counted whole.
+- A part with no topics of its own covers **whatever no other part claims**, so
+  splitting a course in half needs you to list the topics once, not twice.
+- Once a part has been sat, record what you got. The requirement for the
+  remaining sittings is then worked backwards from your target through the
+  weights and the grade already banked:
+
+  ```
+  needed = (target − banked − points from the rest of the course) ÷ remaining weight
+  ```
+
+  and it says which of those it used. Without weights it falls back to the
+  target alone and labels the figure an estimate; with the grading scale set to
+  unknown it says so instead of guessing.
+
+A part switcher only appears when there is more than one sitting. An exam you
+never split behaves exactly as before.
 
 ---
 
@@ -117,6 +154,31 @@ The desktop app is the same application as the web build, wrapped in Electron.
 It starts its own local server and keeps its database in the OS application-data
 folder (`%APPDATA%\ExamOS` on Windows), so your data survives reinstalls.
 **File → Open data folder** shows you exactly where it is.
+
+### Phone (iPhone and Android)
+
+ExamOS installs on a phone as a **progressive web app**: open it in the
+browser, then **Share → Add to Home Screen** on iOS or **Install app** on
+Android. It gets its own icon and opens full-screen, without browser chrome.
+
+There is **no App Store or Play Store build**, and this repository cannot
+produce one: an `.ipa` requires a paid Apple Developer account, a Mac to build
+and sign it, and App Store review. The home-screen install is the real path,
+not a placeholder for one.
+
+Point the phone at wherever the app is running:
+
+- **Self-hosted or development server** — start it on the network with
+  `HOSTNAME=0.0.0.0 npm start`, then open `http://<your-computer-ip>:3000` from
+  the phone on the same Wi-Fi.
+- **Desktop app** — **File → Share to my phone…** restarts the local server on
+  the network, tells you exactly what that exposes and to whom, asks you to
+  confirm, then copies the address to the clipboard. By default the desktop app
+  listens on loopback only and nothing else on the network can reach it.
+
+Sharing over the network is plain HTTP on your own LAN. Anyone on that network
+who has the address can reach the sign-in page, so use it on a network you
+trust, and close the desktop app when you are done.
 
 ### Development
 
@@ -161,11 +223,13 @@ native modules to rebuild per platform. The whole database is held in memory
 and flushed atomically after each write — the right trade for a single-student
 workload.
 
-**Eighteen tables.** Users, exams, materials, topics, topic items, previous
-exams, research sources, attempts, questions, answers, scan pages, mistakes,
-topic mastery, performance snapshots, study plans, study tasks, study materials
-and notifications. Every row a person owns carries `user_id`, so access control
-is a `WHERE` clause rather than something to remember.
+**Nineteen tables.** Users, exams, exam parts, materials, topics, topic items,
+previous exams, research sources, attempts, questions, answers, scan pages,
+mistakes, topic mastery, performance snapshots, study plans, study tasks, study
+materials and notifications. Every row a person owns carries `user_id`, so
+access control is a `WHERE` clause rather than something to remember. The
+schema is applied on every start, and additive column migrations run after it,
+so an existing database upgrades in place instead of being rebuilt.
 
 **Authentication** is local: scrypt password hashing and a signed JWT in an
 httpOnly cookie. No external identity provider, no cloud sync.
@@ -211,9 +275,9 @@ pass. Anything that fails is regenerated before you see the test.
 
 ```bash
 npm run typecheck
-npm test                 # 34 unit tests: scoring engine and quality gate
+npm test                 # 35 unit tests: scoring engine and quality gate
 npm run seed:demo        # a worked example to click through
-npm run test:e2e         # 34 browser tests, desktop and mobile viewports
+npm run test:e2e         # 54 browser tests: 27 checks at desktop and phone width
 ```
 
 The unit tests cover the parts that must be provably right: the grading-scale
@@ -222,10 +286,14 @@ weighting, consistency, the band ceiling, and every source-label rule.
 
 The browser tests walk every screen at desktop and phone width, in both
 languages, and check that AI features refuse cleanly when no key is configured
-and that one account cannot reach another's data.
+and that one account cannot reach another's data. Seven of them cover exams in
+parts: that the countdown names the next sitting, that readiness and generated
+tests stay inside that sitting's topics, and that a banked result changes what
+the remaining sitting has to score.
 
 `npm run seed:demo` fills a database with a realistic worked example — a
-Data Structures exam 17 days out, three improving practice tests, a mastery
+Data Structures exam split into two kolokviums, the first already sat and
+graded, the second 17 days out, with three improving practice tests, a mastery
 profile, a mistake book and a study plan — so the whole product can be
 exercised without spending model calls.
 

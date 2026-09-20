@@ -7,7 +7,7 @@
   "scripts": {
     "predev": "node scripts/copy-wasm.mjs",
     "dev": "next dev",
-    "prebuild": "node scripts/copy-wasm.mjs && node scripts/make-icon.mjs",
+    "prebuild": "node scripts/copy-wasm.mjs && npm run icons",
     "build": "next build && node scripts/postbuild.mjs",
     "start": "node .next/standalone/server.js",
     "typecheck": "tsc --noEmit",
@@ -18,7 +18,8 @@
     "desktop:mac": "npm run build && electron-builder --mac dmg --publish never",
     "desktop:linux": "npm run build && electron-builder --linux AppImage --publish never",
     "seed:demo": "node scripts/seed-demo.mjs",
-    "pretest": "tsc -p tsconfig.test.json && node scripts/fix-test-imports.mjs"
+    "pretest": "tsc -p tsconfig.test.json && node scripts/fix-test-imports.mjs",
+    "icons": "node scripts/make-icon.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.127.0",
