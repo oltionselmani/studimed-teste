@@ -156,9 +156,14 @@ It is unsigned, so Windows SmartScreen warns on first launch — choose
 **More info → Run anyway**.
 
 The desktop app is the same application as the web build, wrapped in Electron.
-It starts its own local server and keeps its database in the OS application-data
-folder (`%APPDATA%\ExamOS` on Windows), so your data survives reinstalls.
-**File → Open data folder** shows you exactly where it is.
+It shows a splash while its local server starts, then keeps its database in the
+OS application-data folder (`%APPDATA%\ExamOS` on Windows), so your data
+survives reinstalls. **File → Open data folder** shows you exactly where it is.
+
+Every icon — the installer, the window, the phone home screen, the mark in the
+app's own header — is resized from one file, `build/logo-source.png`, by
+`npm run icons` (which `npm run build` runs for you). Replacing that file
+changes the logo everywhere; nothing in the codebase redraws it.
 
 ### Phone (iPhone and Android)
 

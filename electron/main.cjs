@@ -18,6 +18,7 @@ const fs = require('node:fs');
 
 let serverProcess = null;
 let mainWindow = null;
+let splashWindow = null;
 let serverUrl = null;
 let serverPort = null;
 // The server listens on the loopback address unless the student explicitly
@@ -180,6 +181,38 @@ async function shareToPhone() {
   });
 }
 
+/**
+ * A small window shown while the local server boots, so launching the app
+ * looks like something is happening instead of nothing. It is closed the
+ * moment the real window has something to paint.
+ */
+function createSplash() {
+  splashWindow = new BrowserWindow({
+    width: 320,
+    height: 300,
+    frame: false,
+    resizable: false,
+    movable: true,
+    show: true,
+    center: true,
+    backgroundColor: '#04092e',
+    title: 'ExamOS',
+    icon: path.join(__dirname, '..', 'build', 'icon.png'),
+    skipTaskbar: true,
+    webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
+  });
+  splashWindow.loadFile(path.join(__dirname, 'splash.html'));
+  splashWindow.on('closed', () => {
+    splashWindow = null;
+  });
+  return splashWindow;
+}
+
+function closeSplash() {
+  if (splashWindow && !splashWindow.isDestroyed()) splashWindow.close();
+  splashWindow = null;
+}
+
 function createWindow(url) {
   mainWindow = new BrowserWindow({
     width: 1280,
@@ -198,7 +231,10 @@ function createWindow(url) {
     },
   });
 
-  mainWindow.once('ready-to-show', () => mainWindow.show());
+  mainWindow.once('ready-to-show', () => {
+    closeSplash();
+    mainWindow.show();
+  });
   mainWindow.loadURL(url.toString());
 
   // Anything that is not the local app opens in the real browser.
@@ -297,10 +333,12 @@ if (!app.requestSingleInstanceLock()) {
 
   app.whenReady().then(async () => {
     buildMenu();
+    createSplash();
     try {
       const url = await startServer();
       createWindow(url);
     } catch (error) {
+      closeSplash();
       dialog.showErrorBox('ExamOS could not start', String(error && error.message ? error.message : error));
       app.quit();
       return;

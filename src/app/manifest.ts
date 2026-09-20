@@ -17,7 +17,9 @@ export default function manifest(): MetadataRoute.Manifest {
     scope: '/',
     display: 'standalone',
     orientation: 'portrait',
-    background_color: '#0d0f14',
+    // The logo's own background, so a phone's launch screen shows the icon on
+    // its own colour instead of a square sitting on a different dark.
+    background_color: '#04092e',
     theme_color: '#3949c9',
     categories: ['education', 'productivity'],
     icons: [

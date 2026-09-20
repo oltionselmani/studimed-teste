@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>ExamOS</title>
+    <style>
+      :root { color-scheme: dark; }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 18px;
+        /* The logo's own background, so the mark sits on its own colour. */
+        background: #04092e;
+        color: #dfe6ff;
+        font: 500 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        user-select: none;
+        -webkit-user-select: none;
+        border-radius: 14px;
+        overflow: hidden;
+      }
+      img { width: 132px; height: 132px; border-radius: 22px; }
+      .name { font-size: 20px; font-weight: 600; letter-spacing: -0.01em; color: #fff; }
+      .status { font-size: 12.5px; color: #8a9ad0; }
+      /* A determinate-looking bar would be a lie: the wait is the local server
+         booting, and nothing here knows how long that takes. */
+      .track { width: 168px; height: 3px; border-radius: 999px; background: #16204f; overflow: hidden; }
+      .bar { width: 40%; height: 100%; border-radius: 999px; background: #6f8cff; animation: slide 1.15s ease-in-out infinite; }
+      @keyframes slide {
+        0% { transform: translateX(-110%); }
+        100% { transform: translateX(260%); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .bar { animation: none; width: 100%; opacity: 0.55; }
+      }
+    </style>
+  </head>
+  <body>
+    <img src="splash-icon.png" alt="" />
+    <div class="name">ExamOS</div>
+    <div class="track"><div class="bar"></div></div>
+    <div class="status">Starting…</div>
+  </body>
+</html>

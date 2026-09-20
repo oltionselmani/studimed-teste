@@ -328,14 +328,16 @@ export function ThemeToggle() {
 
 function Logo() {
   return (
-    <span
+    // The real product mark, at the size it is drawn, rather than a redrawn
+    // approximation of it. Decorative: the app name sits next to it.
+    <img
+      src="/icons/logo.png"
+      alt=""
       aria-hidden
-      className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--accent)] text-white"
-    >
-      <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M4 18V9M10 18V5M16 18v-6M22 18H2" />
-      </svg>
-    </span>
+      width={32}
+      height={32}
+      className="h-8 w-8 shrink-0 rounded-lg"
+    />
   );
 }
 
