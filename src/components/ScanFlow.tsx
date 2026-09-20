@@ -111,7 +111,8 @@ export function ScanFlow(props: Props) {
             capture="environment"
             multiple
             className="sr-only"
-            aria-label={d.scan.takePhoto}
+            tabIndex={-1}
+            aria-hidden
             onChange={() => formRef.current?.requestSubmit()}
           />
           <input
@@ -121,7 +122,8 @@ export function ScanFlow(props: Props) {
             accept="image/*,application/pdf"
             multiple
             className="sr-only"
-            aria-label={d.scan.uploadFiles}
+            tabIndex={-1}
+            aria-hidden
             onChange={() => formRef.current?.requestSubmit()}
           />
           <Button type="button" size="lg" onClick={() => cameraRef.current?.click()}>

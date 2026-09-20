@@ -7,6 +7,7 @@ import {
 } from './schemas';
 import { HONESTY_RULES, examContext, languageInstruction } from './prompts';
 import { chunkMaterials, fitToBudget, renderChunks, sampleChunks, selectChunks } from './retrieval';
+import { mechanicalIssues, normaliseQuestion } from '@/lib/engine/question-validation';
 import type { AttemptKind, Difficulty, Exam, Material } from '@/lib/types';
 
 export interface GenerationRequest {
@@ -212,39 +213,7 @@ async function reviewQuestions(
   questions: GeneratedQuestion[],
   request: GenerationRequest,
 ): Promise<{ index: number; problems: string[] }[]> {
-  const mechanical: { index: number; problems: string[] }[] = [];
-  const seen = new Map<string, number>();
-
-  questions.forEach((question, index) => {
-    const problems: string[] = [];
-    const fingerprint = question.prompt.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().slice(0, 90);
-    if (seen.has(fingerprint)) problems.push('duplicate of an earlier question');
-    else seen.set(fingerprint, index);
-
-    if (!question.expected_answer.trim()) problems.push('no expected answer');
-    if (!question.grading_criteria.trim()) problems.push('no grading criteria');
-
-    const isChoice = question.type === 'multiple_choice' || question.type === 'true_false';
-    if (isChoice) {
-      if (question.options.length < 2) problems.push('choice question with fewer than two options');
-      if (
-        question.correct_option < 0 ||
-        question.correct_option >= question.options.length
-      ) {
-        problems.push('correct_option does not point at one of the options');
-      }
-      if (new Set(question.options.map((o) => o.trim().toLowerCase())).size !== question.options.length) {
-        problems.push('duplicate options');
-      }
-    }
-    if (question.source_type === 'verified_external') {
-      problems.push('claims a verified external source that was never supplied');
-    }
-    if (question.source_type === 'course_material' && !question.source_reference.trim()) {
-      problems.push('claims course material as its source but names no file');
-    }
-    if (problems.length > 0) mechanical.push({ index, problems });
-  });
+  const mechanical = mechanicalIssues(questions);
 
   const survivors = questions
     .map((question, index) => ({ question, index }))
@@ -301,24 +270,9 @@ grading_criteria: ${question.grading_criteria}
   return [...mechanical, ...modelFailures];
 }
 
-/** Clamps model output into the shape the rest of the app relies on. */
-function normalise(questions: GeneratedQuestion[], request: GenerationRequest): GeneratedQuestion[] {
-  const knownTopics = new Set(request.allTopics.map((topic) => topic.toLowerCase()));
-  return questions.map((question) => {
-    const isChoice = question.type === 'multiple_choice' || question.type === 'true_false';
-    const matched = request.allTopics.find(
-      (topic) => topic.toLowerCase() === question.topic_name.toLowerCase(),
-    );
-    return {
-      ...question,
-      // Snap to the canonical topic name so mastery tracking stays consistent.
-      topic_name:
-        matched ??
-        (knownTopics.size > 0 && !matched ? question.topic_name.trim() : question.topic_name.trim()),
-      options: isChoice ? question.options : [],
-      correct_option: isChoice ? question.correct_option : -1,
-      code_block: question.code_block.replace(/^```[a-z]*\n?|```$/g, '').trim(),
-      points: Math.max(0.5, Math.round(question.points * 2) / 2),
-    };
-  });
+function normalise(
+  questions: GeneratedQuestion[],
+  request: GenerationRequest,
+): GeneratedQuestion[] {
+  return questions.map((question) => normaliseQuestion(question, request.allTopics));
 }

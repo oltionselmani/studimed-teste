@@ -334,8 +334,10 @@ export function computeReadiness(input: ReadinessInput): ReadinessResult {
 
   // ---- Composite score -----------------------------------------------------
   // Four transparent components, each 0..1, then a fixed weighting.
-  // performance: how close recent work is to what the target demands.
-  const performance = clamp01(1 + Math.min(0, (gap ?? 0) / 30));
+  // performance: how close recent work is to what the target demands. A gap of
+  // 25 percentage points takes this to zero, so the distance from the target
+  // dominates the result rather than being averaged away.
+  const performance = clamp01(1 + Math.min(0, (gap ?? 0) / 25));
   // coverageScore: untested material is unknown material.
   const coverageScore = coverage === null ? 0.5 : clamp01(coverage);
   // stability: erratic scores mean the average is not trustworthy.
@@ -344,11 +346,11 @@ export function computeReadiness(input: ReadinessInput): ReadinessResult {
   const runway = runwayScore(gap, timeLeft, trendPerAttempt);
 
   const score = Math.round(
-    (performance * 0.45 + coverageScore * 0.2 + stability * 0.15 + runway * 0.2) * 100,
+    (performance * 0.55 + coverageScore * 0.15 + stability * 0.1 + runway * 0.2) * 100,
   );
 
   return {
-    band: bandFor(score),
+    band: bandFor(score, gap),
     score,
     recentAveragePercent,
     recentAverageGrade:
@@ -399,9 +401,22 @@ function runwayScore(gap: number | null, timeLeft: TimeLeft, trend: number | nul
   return clamp01(days / (daysNeeded * 1.3));
 }
 
-export function bandFor(score: number): ReadinessBand {
-  if (score >= 80) return 'on_track';
-  if (score >= 60) return 'needs_attention';
-  if (score >= 40) return 'at_risk';
-  return 'significant_gap';
+/**
+ * Bands the composite score, then applies a ceiling based on the raw gap.
+ *
+ * The ceiling exists because good coverage and a comfortable runway should
+ * never add up to "on track" for a grade the student is not currently
+ * reaching. Being ahead on process is not the same as being ahead.
+ */
+export function bandFor(score: number, gap: number | null = null): ReadinessBand {
+  const fromScore: ReadinessBand =
+    score >= 80 ? 'on_track' : score >= 60 ? 'needs_attention' : score >= 40 ? 'at_risk' : 'significant_gap';
+
+  if (gap === null) return fromScore;
+
+  const ceiling: ReadinessBand =
+    gap >= -2 ? 'on_track' : gap >= -10 ? 'needs_attention' : gap >= -20 ? 'at_risk' : 'significant_gap';
+
+  const order: ReadinessBand[] = ['significant_gap', 'at_risk', 'needs_attention', 'on_track'];
+  return order[Math.min(order.indexOf(fromScore), order.indexOf(ceiling))];
 }

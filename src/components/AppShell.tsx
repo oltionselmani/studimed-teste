@@ -46,7 +46,7 @@ export function AppShell({ user, exams, unreadCount, children }: Props) {
           onClick={() => setMenuOpen((open) => !open)}
           aria-expanded={menuOpen}
           aria-controls="app-nav"
-          aria-label={menuOpen ? d.common.close : d.nav.dashboard}
+          aria-label={menuOpen ? d.nav.closeMenu : d.nav.openMenu}
           className="relative -mr-1 rounded-lg p-2 text-[var(--text-muted)] hover:bg-[var(--bg-hover)]"
         >
           {unreadCount > 0 && !menuOpen ? (

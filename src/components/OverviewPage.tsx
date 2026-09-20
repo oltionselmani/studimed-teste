@@ -58,6 +58,15 @@ export function OverviewPage({
   };
 
   const ranked = [...mastery].sort((a, b) => (a.mastery ?? 2) - (b.mastery ?? 2));
+  const tested = ranked.filter((row) => row.mastery !== null);
+  // Split the ranked list so a middling topic never appears as both a weakness
+  // and a strength.
+  const weakestCount = Math.min(5, Math.ceil(ranked.length / 2));
+  const weakest = ranked.slice(0, weakestCount);
+  const strongest = [...tested]
+    .reverse()
+    .filter((row) => !weakest.some((item) => item.topic_name === row.topic_name))
+    .slice(0, 5);
 
   return (
     <div className="space-y-9">
@@ -93,7 +102,7 @@ export function OverviewPage({
             />
             <Stat label={d.exam.target} value={exam.target_grade} />
             <Stat
-              label={d.readiness.factors.coverage.split(':')[0]}
+              label={d.readiness.coverageLabel}
               value={readiness.coverage === null ? '—' : `${Math.round(readiness.coverage * 100)}%`}
               sub={`${readiness.topicsTested}/${readiness.topicsTotal}`}
             />
@@ -131,11 +140,12 @@ export function OverviewPage({
 
       {ranked.length > 0 ? (
         <div className="grid gap-5 md:grid-cols-2">
+          {weakest.length > 0 ? (
           <section>
             <SectionTitle>{d.report.weakest}</SectionTitle>
             <Card className="p-5">
               <MasteryBars
-                rows={ranked.slice(0, 5).map((row) => ({
+                rows={weakest.map((row) => ({
                   topic: row.topic_name,
                   value: row.mastery === null ? null : row.mastery * 100,
                   questions: row.questions_seen,
@@ -146,25 +156,24 @@ export function OverviewPage({
               />
             </Card>
           </section>
+          ) : null}
+          {strongest.length > 0 ? (
           <section>
             <SectionTitle>{d.report.strongest}</SectionTitle>
             <Card className="p-5">
               <MasteryBars
-                rows={[...ranked]
-                  .reverse()
-                  .filter((row) => row.mastery !== null)
-                  .slice(0, 5)
-                  .map((row) => ({
-                    topic: row.topic_name,
-                    value: row.mastery === null ? null : row.mastery * 100,
-                    questions: row.questions_seen,
-                  }))}
+                rows={strongest.map((row) => ({
+                  topic: row.topic_name,
+                  value: row.mastery === null ? null : row.mastery * 100,
+                  questions: row.questions_seen,
+                }))}
                 bandLabels={bandLabels}
                 tableCaption={d.report.strongest}
                 columnLabels={[d.common.topic, d.common.questions]}
               />
             </Card>
           </section>
+          ) : null}
         </div>
       ) : null}
 

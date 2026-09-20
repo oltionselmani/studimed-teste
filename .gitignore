@@ -12,3 +12,8 @@ next-env.d.ts
 .DS_Store
 npm-debug.log*
 .test-data/
+.demo-data/
+.test-build/
+.demo-run/
+test-results/
+playwright-report/

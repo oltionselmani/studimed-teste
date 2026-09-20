@@ -97,7 +97,8 @@ export function MaterialUploader({ examId }: { examId: string }) {
           multiple
           accept={ACCEPT}
           className="sr-only"
-          aria-label={d.materials.upload}
+          tabIndex={-1}
+          aria-hidden
           onChange={(event) => addFiles(event.target.files)}
         />
       </div>

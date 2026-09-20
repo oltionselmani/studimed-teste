@@ -1,0 +1,132 @@
+name: Desktop installers
+
+# Builds the installable desktop app. The Windows job produces the NSIS setup
+# wizard (ExamOS-Setup-<version>.exe) — the one you double-click on a PC.
+#
+# Run it from the Actions tab ("Run workflow"), or push a v* tag to get a
+# GitHub Release with the installers attached.
+
+on:
+  workflow_dispatch:
+    inputs:
+      platforms:
+        description: Which installers to build
+        type: choice
+        default: windows
+        options: [windows, all]
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    name: Windows installer (.exe)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build the application
+        run: npm run build
+
+      - name: Package the installer
+        run: npx electron-builder --win nsis --publish never
+        env:
+          # Without a signing certificate the installer is unsigned, and
+          # Windows SmartScreen will warn on first run. That is expected.
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ExamOS-Windows-Setup
+          path: release/*.exe
+          retention-days: 30
+          if-no-files-found: error
+
+  macos:
+    name: macOS disk image (.dmg)
+    if: github.event_name == 'push' || github.event.inputs.platforms == 'all'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build
+
+      - name: Package the disk image
+        run: npx electron-builder --mac dmg --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ExamOS-macOS
+          path: release/*.dmg
+          retention-days: 30
+          if-no-files-found: error
+
+  linux:
+    name: Linux AppImage
+    if: github.event_name == 'push' || github.event.inputs.platforms == 'all'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build
+
+      - name: Package the AppImage
+        run: npx electron-builder --linux AppImage --publish never
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ExamOS-Linux
+          path: release/*.AppImage
+          retention-days: 30
+          if-no-files-found: error
+
+  release:
+    name: Attach the installers to the release
+    needs: [windows, macos, linux]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*
+          generate_release_notes: true
+          body: |
+            Download the installer for your machine:
+
+            - **Windows** — `ExamOS-Setup-*.exe` (setup wizard: choose the folder, then Install)
+            - **macOS** — `ExamOS-*.dmg`
+            - **Linux** — `ExamOS-*.AppImage`
+
+            The installers are unsigned, so Windows SmartScreen shows a warning on
+            first run: choose **More info → Run anyway**.
+
+            Everything you put into ExamOS stays on your own machine. AI features
+            need an Anthropic API key, which you add under Settings after the
+            first launch.

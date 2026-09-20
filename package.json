@@ -7,15 +7,18 @@
   "scripts": {
     "predev": "node scripts/copy-wasm.mjs",
     "dev": "next dev",
-    "prebuild": "node scripts/copy-wasm.mjs",
+    "prebuild": "node scripts/copy-wasm.mjs && node scripts/make-icon.mjs",
     "build": "next build && node scripts/postbuild.mjs",
     "start": "node .next/standalone/server.js",
-    "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "test": "node --test tests/*.test.mjs",
-    "desktop:dev": "node scripts/copy-wasm.mjs && electron electron/main.cjs",
-    "desktop:pack": "npm run build && electron-builder --win nsis --publish never",
-    "test:e2e": "playwright test"
+    "desktop:dev": "npm run build && electron electron/main.cjs",
+    "test:e2e": "playwright test",
+    "desktop:win": "npm run build && electron-builder --win nsis --publish never",
+    "desktop:mac": "npm run build && electron-builder --mac dmg --publish never",
+    "desktop:linux": "npm run build && electron-builder --linux AppImage --publish never",
+    "seed:demo": "node scripts/seed-demo.mjs",
+    "pretest": "tsc -p tsconfig.test.json && node scripts/fix-test-imports.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.127.0",
@@ -41,5 +44,88 @@
     "electron-builder": "^25.1.8",
     "tailwindcss": "^4.1.13",
     "typescript": "^5.7.3"
+  },
+  "main": "electron/main.cjs",
+  "build": {
+    "appId": "com.examos.app",
+    "productName": "ExamOS",
+    "copyright": "ExamOS",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "electron/**/*",
+      "build/icon.png",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": ".next/standalone",
+        "to": "app-server",
+        "filter": [
+          "**/*",
+          "!data",
+          "!data/**",
+          "!.test-data",
+          "!.test-data/**",
+          "!**/*.sqlite*"
+        ]
+      }
+    ],
+    "asar": true,
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png",
+      "artifactName": "ExamOS-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "allowElevation": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "ExamOS",
+      "include": "electron/installer.nsh",
+      "deleteAppDataOnUninstall": false
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png",
+      "category": "public.app-category.education",
+      "artifactName": "ExamOS-${version}-${arch}.${ext}"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png",
+      "category": "Education",
+      "artifactName": "ExamOS-${version}.${ext}"
+    }
+  },
+  "author": {
+    "name": "ExamOS"
   }
 }

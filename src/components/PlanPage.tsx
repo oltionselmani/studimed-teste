@@ -252,22 +252,26 @@ export function PlanPage(props: Props) {
         ) : (
           <Card className="mt-4 divide-y">
             {props.sheets.map((sheet) => (
-              <div key={sheet.id} className="flex flex-wrap items-center gap-3 p-4">
-                <Link
-                  href={`/print/study/${sheet.id}`}
-                  className="min-w-0 flex-1 truncate text-sm font-medium hover:text-[var(--accent-text)]"
-                >
-                  {sheet.title}
-                </Link>
-                <span className="tabular text-xs text-[var(--text-subtle)]">
-                  {date(sheet.created_at)}
-                </span>
-                <Link
-                  href={`/print/study/${sheet.id}`}
-                  className="text-sm font-medium text-[var(--accent-text)] hover:underline"
-                >
-                  {d.study.printSheet}
-                </Link>
+              <div className="flex items-start gap-3 p-4" key={sheet.id}>
+                <div className="min-w-0 flex-1">
+                  <Link
+                    href={`/print/study/${sheet.id}`}
+                    className="block truncate text-sm font-medium hover:text-[var(--accent-text)]"
+                  >
+                    {sheet.title}
+                  </Link>
+                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <span className="tabular text-xs text-[var(--text-subtle)]">
+                      {date(sheet.created_at)}
+                    </span>
+                    <Link
+                      href={`/print/study/${sheet.id}`}
+                      className="text-xs font-medium text-[var(--accent-text)] hover:underline"
+                    >
+                      {d.study.printSheet}
+                    </Link>
+                  </div>
+                </div>
                 <form action={deleteStudySheetAction}>
                   <input type="hidden" name="sheet_id" value={sheet.id} />
                   <input type="hidden" name="exam_id" value={props.exam.id} />

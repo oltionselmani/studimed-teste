@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": false,
+    "module": "es2022",
+    "moduleResolution": "bundler",
+    "target": "es2022",
+    "outDir": ".test-build",
+    "rootDir": "./src/lib",
+    "incremental": false,
+    "plugins": []
+  },
+  "include": ["src/lib/engine/**/*.ts", "src/lib/types.ts", "src/lib/ai/schemas.ts"]
+}

@@ -60,10 +60,14 @@ export function ExamRunner({
     return initial;
   });
 
-  const [savedAt, setSavedAt] = useState<number | null>(null);
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle');
   const [confirming, setConfirming] = useState(false);
   const [state, submit] = useActionState<ActionResult, FormData>(submitAttemptAction, {});
   const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  // Mirrors `answers` so the update handler can read the latest value without
+  // doing work inside a state updater.
+  const answersRef = useRef(answers);
+  answersRef.current = answers;
 
   useEffect(() => {
     if (state.redirectTo) router.push(state.redirectTo);
@@ -72,14 +76,22 @@ export function ExamRunner({
   const persistAnswer = useCallback(
     (question: Question, value: LocalAnswer) => {
       clearTimeout(timers.current[question.id]);
+      setSaveState('saving');
       timers.current[question.id] = setTimeout(() => {
-        void saveAnswerAction({
+        saveAnswerAction({
           attemptId: attempt.id,
           questionId: question.id,
           responseText: value.responseText,
           selectedOption: value.selectedOption,
           flagged: value.flagged,
-        }).then(() => setSavedAt(Date.now()));
+        })
+          .then(() => setSaveState('saved'))
+          .catch((error) => {
+            // Losing an answer silently during an exam is the worst possible
+            // failure here, so it is surfaced rather than swallowed.
+            console.error('[examos] autosave failed:', error);
+            setSaveState('failed');
+          });
       }, AUTOSAVE_DELAY);
     },
     [attempt.id],
@@ -87,12 +99,13 @@ export function ExamRunner({
 
   const update = useCallback(
     (question: Question, patch: Partial<LocalAnswer>) => {
-      setAnswers((current) => {
-        const next = { ...current[question.id], ...patch };
-        const updated = { ...current, [question.id]: next };
-        persistAnswer(question, next);
-        return updated;
-      });
+      // The next value is computed outside the state updater: an updater must
+      // be pure, and React is free to call it more than once.
+      const current = answersRef.current[question.id];
+      const next: LocalAnswer = { ...current, ...patch };
+      answersRef.current = { ...answersRef.current, [question.id]: next };
+      setAnswers(answersRef.current);
+      persistAnswer(question, next);
     },
     [persistAnswer],
   );
@@ -141,9 +154,13 @@ export function ExamRunner({
         <div className="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-3 px-5 py-3 sm:px-8">
           <div className="min-w-0">
             <div className="truncate text-sm font-medium">{attempt.title}</div>
-            <div className="tabular text-xs text-[var(--text-subtle)]">
+            <div className="tabular text-xs text-[var(--text-subtle)]" aria-live="polite">
               {t(d.attempt.progress, { answered: answeredCount, total: questions.length })}
-              {savedAt ? ` · ${d.attempt.autosaved}` : ''}
+              {saveState === 'saving' ? ` · ${d.attempt.autosaving}` : null}
+              {saveState === 'saved' ? ` · ${d.attempt.autosaved}` : null}
+              {saveState === 'failed' ? (
+                <span className="font-medium text-[var(--bad)]"> · {d.attempt.autosaveFailed}</span>
+              ) : null}
             </div>
           </div>
           {attempt.time_limit_minutes > 0 ? (
@@ -218,7 +235,7 @@ export function ExamRunner({
               onClick={() => update(question, { flagged: !answer?.flagged })}
               aria-pressed={Boolean(answer?.flagged)}
               className={cx(
-                'rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors',
+                'ms-auto rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors',
                 answer?.flagged
                   ? 'border-[var(--warn)] bg-[var(--warn-soft)] text-[var(--warn)]'
                   : 'text-[var(--text-muted)] hover:bg-[var(--bg-hover)]',
